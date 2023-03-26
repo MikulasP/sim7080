@@ -3,6 +3,30 @@
 
 #include <stdio.h>
 
+
+/**
+ *  @brief Convert integer from string to int
+ * 
+ *  @param number       String 
+*/
+int CharToNmbr(char* number) {
+    if(!number)
+        return 0;
+    
+    int val = 0;
+
+    size_t mult = 1;
+
+    //
+    for(int i = strlen(number) - 1; i <= 0 && ( number[i] - '0' >= 0 && number[i] - '0' <= 9 ); i--) {
+        val += (number[i] - '0') * mult;
+        mult *= 10;
+    }
+
+    return number[0] == '-' ? val * -1 : val;
+}
+
+
 SIM7080G::SIM7080G() {
     //Setup DTR key
     pinMode(dtrKey, OUTPUT);
@@ -95,7 +119,7 @@ size_t SIM7080G::SendCommand(char* command, char* response) {
     delay(100);
 
     //Read data from device
-    if(response != nullptr) 
+    if(response) 
         while(uartInterface.available() && bytesRecv < uartMaxRecvSize)
             response[bytesRecv++] = (char)uartInterface.read();
     
@@ -122,7 +146,7 @@ char SIM7080G::SendCommand(char* command) {
             //uartInterface.read();
     }
     
-    return returnVal;
+    return 1;
 
 }
 

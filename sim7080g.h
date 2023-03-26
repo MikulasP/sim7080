@@ -197,6 +197,26 @@ public:
     uint8_t HotStartGNSS(void);
     //TODO test
 
+    //  #
+    //  #   Get
+    //  #
+
+    /**
+     *  @brief Get battery voltage.
+     * 
+     *  @return Battery voltage in mV.
+    */
+    uint16_t GetVBat(void) const;
+    //TODO
+
+    /**
+     *  @brief Get battery charge percentage.
+     * 
+     *  @returns 0-100 battery charge percentage.
+    */
+    uint8_t GetPBat(void) const;
+    //TODO
+
 private:
 
     /**
