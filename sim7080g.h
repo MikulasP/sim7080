@@ -3,33 +3,67 @@
 
 #include <Arduino.h>
 
-enum SIM7080G_PWR { SIM_PWDN, SIM_PWUP, SIM_SLEEP };
+//#define ARDUINO_DUE
+
+//Module power states
+enum SIM7080G_PWR {
+    SIM_PWDN,       //Power down
+    SIM_PWUP,       //Power up
+    SIM_SLEEP       //Hardware sleep
+};
+
+struct SIM7080G_GNSS {
+    uint8_t run;            //Run status
+    //uint8_t fix;            //Fix status
+    char datetime[19];      //UTC date & time
+    char latitude[11];      //Latitude
+    char longitude[12];     //Longitude
+    //char mslAltitude[9];    //MSL Altitude
+    //char sog[7];            //speed Over Ground
+    //char cog[7];            //Course Over Ground
+    //uint8_t fixMode;        //Fix mode
+    //Reserved 1 field
+    //char hdop[5];           //HDOP
+    //char pdop[5];           //PDOP
+    //char vdop[5];           //VDOP
+    uint8_t gpsSat;         //GPS Satellites in view
+    uint8_t gnssSat;        //GNSS Satellites in view
+    uint8_t glonassSat;     //GLONASS Satellites in view
+    //uint8_t cn0Max;         //C/N0 Max
+    //char hpa[7];            //HPA
+    //char vpa[7];            //VPA
+
+};
 
 class SIM7080G {
 
     //Serial communication
-    const uint8_t uartTX = 47;              //UARt TX pin
-    const uint8_t uartRX = 48;              //UART RX pin
-    const uint32_t uartBaudrate = 921600;   //UART Baudrate
-    HardwareSerial uartInterface = Serial2;   //UART interface to use
+#ifndef ARDUINO_DUE
+    const uint8_t uartTX = 47;                  //UARt TX pin
+    const uint8_t uartRX = 48;                  //UART RX pin
+#endif
+    const uint64_t uartBaudrate = 115200;       //UART Baudrate     (921600)
+    HardwareSerial& uartInterface = Serial1;    //UART interface to use
 
-    size_t uartMaxRecvSize = 2000;          //Max number of bytes to receive (to prevent buffer overflow)
-    //size_t uartRecvtimeout = 5000;          //Wait this ammount of ms after last received byte before returning. ( used in Receive() )
-                                            //if 0 timeout will be ignored
+    const static size_t uartMaxRecvSize = 1000; //Max number of bytes to receive (to prevent buffer overflow)
+    //size_t uartRecvtimeout = 5000;            //Wait this ammount of ms after last received byte before returning. ( used in Receive() )
+                                                //if 0 timeout will be ignored
+
+    char rxBufer[uartMaxRecvSize];
 
     //Power control
-    const uint8_t dtrKey = 14;              //Send module to light sleep (active high)
-    const uint8_t pwrKey = 21;              //Power on/off the module
-
+#ifndef ARDUINO_DUE
+    const uint8_t dtrKey = 14;                  //Send module to light sleep (active high)
+    const uint8_t pwrKey = 21;                  //Power on/off the module
+#else
+    const uint8_t dtrKey = 2;                  //Send module to light sleep (active high)
+    const uint8_t pwrKey = 3;                  //Power on/off the module
+#endif
     //
-    bool uartOpen = false;                  //UART interface state
-    SIM7080G_PWR pwrState = SIM_PWDN;        //Power state
+    bool uartOpen = false;                      //UART interface state
+    SIM7080G_PWR pwrState = SIM_PWDN;           //Power state
 
 public:
-    
-    //
-    //  IO / Power control
-    //
 
     /**
      *  @brief Constructor
@@ -56,7 +90,7 @@ public:
     /**
      *  @brief Get the module's power state
      * 
-     *  @return ...
+     *  @return Power state of the module
     */
     SIM7080G_PWR GetPowerState(void) const;
     //*OK
@@ -102,7 +136,9 @@ public:
     //*OK
 
     /**
+     * @brief Get nuber of bytes in the UART RX FIFO
      * 
+     * @return Number of bytes in the RX FIFO
     */
     size_t AvailableUART(void);
     //*OK
@@ -164,7 +200,11 @@ public:
     //*OK
 
     //  #
-    //  #   GNSS
+    //  #   Cellular communication
+    //  #
+
+    //  #
+    //  #   GNSS 
     //  #
 
     /**
@@ -197,8 +237,24 @@ public:
     uint8_t HotStartGNSS(void);
     //TODO test
 
+    /**
+     *  @brief Get GNSS Information
+     * 
+     *  @param dst              Struct to store GNSS info
+    */
+    void GetGNSS(SIM7080G_GNSS* dst);
+    //TODO test
+
+    /**
+     *  @brief Get GNSS Information
+     * 
+     *  @return GNSS Info
+    */
+    SIM7080G_GNSS GetGNSS(void);
+    //TODO test
+
     //  #
-    //  #   Get
+    //  #   Power
     //  #
 
     /**
@@ -216,6 +272,8 @@ public:
     */
     uint8_t GetPBat(void) const;
     //TODO
+
+    
 
 private:
 

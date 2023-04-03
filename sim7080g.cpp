@@ -26,6 +26,27 @@ int CharToNmbr(char* number) {
     return number[0] == '-' ? val * -1 : val;
 }
 
+/**
+ *  @brief Convert integer from string to int
+ * 
+ *  @param number       String 
+*/
+int CharToNmbr(char* number, size_t len) {
+    if(!number || !len)
+        return 0;
+    
+    int val = 0;
+
+    size_t mult = 1;
+
+    //
+    for(int i = len - 1; i <= 0 && ( number[i] - '0' >= 0 && number[i] - '0' <= 9 ); i--) {
+        val += (number[i] - '0') * mult;
+        mult *= 10;
+    }
+
+    return number[0] == '-' ? val * -1 : val;
+}
 
 SIM7080G::SIM7080G() {
     //Setup DTR key
@@ -85,7 +106,11 @@ SIM7080G_PWR SIM7080G::GetPowerState() const {
 //
 void SIM7080G::OpenUART() {
     if(!uartOpen) {
+#ifndef ARDUINO_DUE
         uartInterface.begin(uartBaudrate, SERIAL_8N1, uartRX, uartTX);
+#else
+        uartInterface.begin(uartBaudrate);
+#endif
         uartOpen = true;
     }
 }
@@ -119,7 +144,7 @@ size_t SIM7080G::SendCommand(char* command, char* response) {
     delay(100);
 
     //Read data from device
-    if(response) 
+    if(response != nullptr || true) 
         while(uartInterface.available() && bytesRecv < uartMaxRecvSize)
             response[bytesRecv++] = (char)uartInterface.read();
     
@@ -135,15 +160,12 @@ char SIM7080G::SendCommand(char* command) {
     delay(100);
 
     //Read data from device
-    //if(response != nullptr) 
     char returnVal = 0;
     for(size_t i = 0; uartInterface.available() && i < uartMaxRecvSize; i++) {
         if(i == strlen(command) + 1)
-            //returnVal = (char)uartInterface.read();
             Serial.print((returnVal = (char)uartInterface.read()));     //Serial is for debug
         else
             Serial.print(uartInterface.read());     //Serial is for debug
-            //uartInterface.read();
     }
     
     return 1;
@@ -184,6 +206,76 @@ uint8_t SIM7080G::ColdStartGNSS() { return SendCommand("AT+CGNSCOLD\r\n"); }
 uint8_t SIM7080G::WarmStartGNSS() { return SendCommand("AT+CGNSWARM\r\n"); }
 
 uint8_t SIM7080G::HotStartGNSS() { return SendCommand("AT+CGNSHOT\r\n"); }
+
+void SIM7080G::GetGNSS(SIM7080G_GNSS* dst) {
+    
+    //get GNSS info from device
+    size_t bytesrecv = SendCommand((char*)"", this->rxBufer);
+
+    
+    
+    uint8_t comas = 0;      //Track number of comas in response text
+    uint8_t infCntr = 0;    //For indexing SIM7080G_GNSS arrays
+
+    for (uint8_t i = 0; i < bytesrecv; i++) {
+        if(rxBufer[i] == ','){
+            comas++;
+            infCntr = 0;
+            continue;
+        }
+
+        //
+        switch (comas)
+        {
+        case 0:     //GNSS Run status
+            dst->run = rxBufer[i] - '0';
+            break;
+
+        case 2:     //UTC date & time
+            dst->datetime[infCntr++] = rxBufer[i];
+            break;
+
+        case 3:     //Latitude
+            dst->latitude[infCntr++] = rxBufer[i];
+            break;
+
+        case 4:     //Longitude
+            dst->longitude[infCntr++] = rxBufer[i];
+            break;
+        
+        case 14:    //GPS Satellites in view
+            dst->gpsSat = (rxBufer[i] - '0') + (infCntr++ ? 1 : 0) * 10;
+            break;
+
+        case 15:    //GNSS Satellites in view
+            dst->gnssSat = (rxBufer[i] - '0') + (infCntr++ ? 1 : 0) * 10;
+            break;
+
+        case 16:    //GNSS Satellites in view
+            dst->glonassSat = (rxBufer[i] - '0') + (infCntr++ ? 1 : 0) * 10;
+            break;
+
+        default:
+            break;
+        }
+    }
+
+}
+
+SIM7080G_GNSS SIM7080G::GetGNSS(void) {
+    SIM7080G_GNSS gnssInfo;
+    GetGNSS(&gnssInfo);
+    return gnssInfo;
+}
+
+
+//  #
+//  #   Power
+//  #
+
+uint16_t SIM7080G::GetVBat(void) const {
+
+}
 
 //  #
 //  #   Private functions
