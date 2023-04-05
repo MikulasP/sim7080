@@ -3,8 +3,6 @@
 
 #include <Arduino.h>
 
-//#define ARDUINO_DUE_TEST        //Will delete soon...
-
 #define SIM7080G_VERBOSE        //Send debug messages to a secondary serial interface
 
 //Module power states
@@ -40,30 +38,25 @@ struct SIM7080G_GNSS {
 class SIM7080G {
 
     //Serial communication
-#ifndef ARDUINO_DUE_TEST
+
     const uint8_t uartTX = 47;                  //UART TX pin
     const uint8_t uartRX = 48;                  //UART RX pin
-#endif
-    const uint64_t uartBaudrate = 115200;       //UART Baudrate     (921600)
-#ifndef ARDUINO_DUE_TEST
+
+    uint64_t uartBaudrate = 921600;             //UART Baudrate     (921600)
     HardwareSerial& uartInterface = Serial1;    //UART interface to use
-#else
-    HardwareSerial& uartInterface = Serial3;
-#endif
+
     const static size_t uartMaxRecvSize = 1000; //Max number of bytes to receive (to prevent buffer overflow)
     //size_t uartRecvtimeout = 5000;            //Wait this ammount of ms after last received byte before returning. ( used in Receive() )
                                                 //if 0 timeout will be ignored
 
+    const uint8_t uartResponseTimeout = 100;    //Time to wait before reading response from device
+
     char rxBufer[uartMaxRecvSize];
 
     //Power control
-#ifndef ARDUINO_DUE_TEST
     const uint8_t dtrKey = 14;                  //Send module to light sleep (active high)
     const uint8_t pwrKey = 21;                  //Power on/off the module
-#else
-    const uint8_t dtrKey = 2;                  //Send module to light sleep (active high)
-    const uint8_t pwrKey = 3;                  //Power on/off the module
-#endif
+
     //
     bool uartOpen = false;                      //UART interface state
     SIM7080G_PWR pwrState = SIM_PWDN;           //Power state
@@ -180,9 +173,10 @@ public:
      * 
      *  @param command      Char array containing the command with null terminator
      * 
-     *  @return First character of response
+     *  @return 
     */
-    char SendCommand(char* command);
+    bool SendCommand(char* command);
+    //*OK
 
     /**
      *  @brief Send len number of bytes to the module
@@ -322,31 +316,31 @@ public:
     /**
      *  @brief Power up GNSS
     */
-    uint8_t PowerUpGNSS(void);
+    bool PowerUpGNSS(void);
     //TODO test
 
     /**
      *  @brief Power down GNSS
     */
-    uint8_t PowerDownGNSS(void);
+    bool PowerDownGNSS(void);
     //TODO test
 
     /**
      *  @brief Cold start GNSS
     */
-    uint8_t ColdStartGNSS(void);
+    bool ColdStartGNSS(void);
     //TODO test
 
     /**
      *  @brief Warm start GNSS
     */
-    uint8_t WarmStartGNSS(void);
+    bool WarmStartGNSS(void);
     //TODO test
 
     /**
      *  @brief Hot start GNSS
     */
-    uint8_t HotStartGNSS(void);
+    bool HotStartGNSS(void);
     //TODO test
 
     /**

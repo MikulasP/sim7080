@@ -1,23 +1,29 @@
 //Header files
 #include "sim7080g.h"
 
-#include <iostream>
+#include <stdio.h>
 
+
+//  "It ain't much but it's honest work"
 /**
  *  @brief Convert integer from string to int
  * 
- *  @param number       String 
+ *  @param number       Start of char array containing the numbers
+ *  @param len          Length of the string to process (if 0 whole string will be processed)
 */
-int CharToNmbr(char* number) {
+int CharToNmbr(char* number, size_t len = 0) {
     if(!number)
         return 0;
     
+    if (!len)
+        len = strlen(number);
+
     int val = 0;
 
     size_t mult = 1;
 
     //
-    for(int i = strlen(number) - 1; i >= 0; i--) {
+    for(int i = len - 1; i >= 0; i--) {
         if(number[i] == '-') {
             val *= -1;
             continue;
@@ -30,28 +36,6 @@ int CharToNmbr(char* number) {
     }
 
     return val; //number[0] == '-' ? val * -1 : val;
-}
-
-/**
- *  @brief Convert integer from string to int
- * 
- *  @param number       String 
-*/
-int CharToNmbr(char* number, size_t len) {
-    if(!number || !len)
-        return 0;
-    
-    int val = 0;
-
-    size_t mult = 1;
-
-    //
-    for(int i = len - 1; i <= 0 && ( number[i] - '0' >= 0 && number[i] - '0' <= 9 ); i--) {
-        val += (number[i] - '0') * mult;
-        mult *= 10;
-    }
-
-    return number[0] == '-' ? val * -1 : val;
 }
 
 SIM7080G::SIM7080G() {
@@ -112,11 +96,7 @@ SIM7080G_PWR SIM7080G::GetPowerState() const {
 //
 void SIM7080G::OpenUART() {
     if(!uartOpen) {
-#ifndef ARDUINO_DUE_TEST
         uartInterface.begin(uartBaudrate, SERIAL_8N1, uartRX, uartTX);
-#else
-        uartInterface.begin(uartBaudrate);
-#endif
         uartOpen = true;
     }
 }
@@ -144,10 +124,11 @@ size_t SIM7080G::SendCommand(char* command, char* response) {
     size_t bytesRecv = 0;
     
     //Send command
-    uartInterface.print(command);
+    uartInterface.write(command, strlen(command));
+    uartInterface.write("\r\n");
 
     //Wait for response
-    delay(100);
+    delay(uartResponseTimeout);
 
     //Read data from device
     if(response != nullptr)
@@ -158,24 +139,20 @@ size_t SIM7080G::SendCommand(char* command, char* response) {
 }
 
 //
-char SIM7080G::SendCommand(char* command) {
+bool SIM7080G::SendCommand(char* command) {
     //Send command
-    uartInterface.print(command);
+    uartInterface.write(command, strlen(command));
+    uartInterface.write("\r\n");
 
     //Wait for response
-    delay(100);
+    delay(uartResponseTimeout);
 
     //Read data from device
-    char returnVal = 0;
-    for(size_t i = 0; uartInterface.available() && i < uartMaxRecvSize; i++) {
-        if(i == strlen(command) + 1)
-            Serial.print((returnVal = (char)uartInterface.read()));     //Serial is for debug
-        else
-            Serial.print(uartInterface.read());     //Serial is for debug
-    }
+    size_t bytesRecv;
+    for(bytesRecv = 0; uartInterface.available() && bytesRecv < uartMaxRecvSize; bytesRecv++)
+        rxBufer[bytesRecv] = (char)uartInterface.read();
     
-    return 1;
-
+    return strncmp(rxBufer + bytesRecv - 4, "OK", 2) == 0;
 }
 
 //
@@ -203,15 +180,15 @@ uint64_t SIM7080G::GetBaudrate() const { return uartBaudrate; }
 //  #   GNSS Application
 //  #
 
-uint8_t SIM7080G::PowerUpGNSS() { return SendCommand("AT+CGNSPWR=1\r\n"); }
+bool SIM7080G::PowerUpGNSS() { return SendCommand("AT+CGNSPWR=1"); }
 
-uint8_t SIM7080G::PowerDownGNSS() { return SendCommand("AT+CGNSPWR=0\r\n"); }
+bool SIM7080G::PowerDownGNSS() { return SendCommand("AT+CGNSPWR=0"); }
 
-uint8_t SIM7080G::ColdStartGNSS() { return SendCommand("AT+CGNSCOLD\r\n"); }
+bool SIM7080G::ColdStartGNSS() { return SendCommand("AT+CGNSCOLD"); }
 
-uint8_t SIM7080G::WarmStartGNSS() { return SendCommand("AT+CGNSWARM\r\n"); }
+bool SIM7080G::WarmStartGNSS() { return SendCommand("AT+CGNSWARM"); }
 
-uint8_t SIM7080G::HotStartGNSS() { return SendCommand("AT+CGNSHOT\r\n"); }
+bool SIM7080G::HotStartGNSS() { return SendCommand("AT+CGNSHOT"); }
 
 void SIM7080G::GetGNSS(SIM7080G_GNSS* dst) {
     
