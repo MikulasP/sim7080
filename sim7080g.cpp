@@ -106,7 +106,7 @@ SIM7080G_PWR SIM7080G::GetPowerState() const {
 //
 void SIM7080G::OpenUART() {
     if(!uartOpen) {
-#ifndef ARDUINO_DUE
+#ifndef ARDUINO_DUE_TEST
         uartInterface.begin(uartBaudrate, SERIAL_8N1, uartRX, uartTX);
 #else
         uartInterface.begin(uartBaudrate);
@@ -144,7 +144,7 @@ size_t SIM7080G::SendCommand(char* command, char* response) {
     delay(100);
 
     //Read data from device
-    if(response != nullptr || true) 
+    if(response != nullptr)
         while(uartInterface.available() && bytesRecv < uartMaxRecvSize)
             response[bytesRecv++] = (char)uartInterface.read();
     

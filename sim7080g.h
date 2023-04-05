@@ -3,7 +3,9 @@
 
 #include <Arduino.h>
 
-//#define ARDUINO_DUE
+#define ARDUINO_DUE_TEST        //Will delete soon...
+
+#define SIM7080G_VERBOSE        //Send debug messages to a secondary serial interface
 
 //Module power states
 enum SIM7080G_PWR {
@@ -38,13 +40,16 @@ struct SIM7080G_GNSS {
 class SIM7080G {
 
     //Serial communication
-#ifndef ARDUINO_DUE
-    const uint8_t uartTX = 47;                  //UARt TX pin
+#ifndef ARDUINO_DUE_TEST
+    const uint8_t uartTX = 47;                  //UART TX pin
     const uint8_t uartRX = 48;                  //UART RX pin
 #endif
     const uint64_t uartBaudrate = 115200;       //UART Baudrate     (921600)
+#ifndef ARDUINO_DUE_TEST
     HardwareSerial& uartInterface = Serial1;    //UART interface to use
-
+#else
+    HardwareSerial& uartInterface = Serial3;
+#endif
     const static size_t uartMaxRecvSize = 1000; //Max number of bytes to receive (to prevent buffer overflow)
     //size_t uartRecvtimeout = 5000;            //Wait this ammount of ms after last received byte before returning. ( used in Receive() )
                                                 //if 0 timeout will be ignored
@@ -52,7 +57,7 @@ class SIM7080G {
     char rxBufer[uartMaxRecvSize];
 
     //Power control
-#ifndef ARDUINO_DUE
+#ifndef ARDUINO_DUE_TEST
     const uint8_t dtrKey = 14;                  //Send module to light sleep (active high)
     const uint8_t pwrKey = 21;                  //Power on/off the module
 #else
@@ -203,6 +208,113 @@ public:
     //  #   Cellular communication
     //  #
 
+    /**
+     *  @brief Get cellular network registration status
+     * 
+     *  @return MSB: NRURC | LSB: Registration status (See SIM7080G AT Command Manual page 63)
+    */
+    uint16_t GetNetworkReg(void) const;
+    //TODO
+
+    /**
+     *  @brief Get cellular signal quality report
+     * 
+     *  @return First 4 bit: rssi | last 4 bit: ber
+    */
+    uint8_t GetSignalQuality(void) const;
+    //TODO
+
+    /**
+     *  @brief List available operators to serial debug interface
+     * 
+     *  @param debugInterface       
+    */
+    void GetCellOperators(HardwareSerial& debugInterface) const;
+    //TODO
+
+    /**
+     *  @brief List available operators to software serial debug interface
+    */
+    void GetCellOperators(SoftwareSerial& debugInterface) const;
+    //TODO
+
+    /**
+     *  @brief List available operators to software serial debug interface
+     * 
+     *  @param dst                  Char array to store the results
+     * 
+     *  @return Number of bytes written to dst
+    */
+    size_t GetCellOperators(char* dst) const;
+    //TODO
+
+    /**
+     *  @brief Select cellular operator to use
+    */
+    void SetCellOperator(char* opName);
+    //TODO
+
+    /**
+     *  @brief Get cellular (phone) functionality
+     * 
+     *  @return Functionality code (See SIM7080G AT Command Manual page 70)
+    */
+    uint8_t GetCellFunction(void) const;
+    //TODO
+
+    /**
+     *  @brief Set cellular (phone) functionality
+    */
+    void SetCellFunction(uint8_t function code);
+    //TODO
+
+    /**
+     *  @brief Get chip time
+     * 
+     *  @param dst          Char array to store time and date (min 21 characters long, including \0)
+    */
+    void GetTime(char* dst) const;
+    //TODO
+
+    /**
+     *  @brief Enter SIM PIN code
+     * 
+     *  @param pin          SIM PIN code
+    */
+    void EnterPIN(uint16_t pin);
+    //TODO
+
+    /**
+     *  @brief Get SIM PIN status
+    */
+    bool GetPINStatus(void);
+    //TODO
+
+    /**
+     *  @brief Activate APP network
+    */
+    void ActivateNetwork(void);
+    //TODO
+
+    /**
+     *  @brief Deactivate APP network
+    */
+    void DeactivateNetwork(void);
+    //TODO
+
+    /**
+     *  @brief Get APP network status
+    */
+    bool GetNetworkStatus(void) static;
+    //TODO
+
+
+    //  #
+    //  #   HTTP(S) applications
+    //  #
+
+
+
     //  #
     //  #   GNSS 
     //  #
@@ -254,7 +366,7 @@ public:
     //TODO test
 
     //  #
-    //  #   Power
+    //  #   Power Info
     //  #
 
     /**
