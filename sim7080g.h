@@ -3,7 +3,7 @@
 
 #include <Arduino.h>
 
-#define ARDUINO_DUE_TEST        //Will delete soon...
+//#define ARDUINO_DUE_TEST        //Will delete soon...
 
 #define SIM7080G_VERBOSE        //Send debug messages to a secondary serial interface
 
@@ -235,7 +235,7 @@ public:
     /**
      *  @brief List available operators to software serial debug interface
     */
-    void GetCellOperators(SoftwareSerial& debugInterface) const;
+    //void GetCellOperators(SoftwareSerial& debugInterface) const;
     //TODO
 
     /**
@@ -265,7 +265,7 @@ public:
     /**
      *  @brief Set cellular (phone) functionality
     */
-    void SetCellFunction(uint8_t function code);
+    void SetCellFunction(uint8_t functionCode);
     //TODO
 
     /**
@@ -305,7 +305,7 @@ public:
     /**
      *  @brief Get APP network status
     */
-    bool GetNetworkStatus(void) static;
+    bool GetNetworkStatus(void) const;
     //TODO
 
 

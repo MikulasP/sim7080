@@ -1,8 +1,7 @@
 //Header files
 #include "sim7080g.h"
 
-#include <stdio.h>
-
+#include <iostream>
 
 /**
  *  @brief Convert integer from string to int
@@ -18,12 +17,19 @@ int CharToNmbr(char* number) {
     size_t mult = 1;
 
     //
-    for(int i = strlen(number) - 1; i <= 0 && ( number[i] - '0' >= 0 && number[i] - '0' <= 9 ); i--) {
-        val += (number[i] - '0') * mult;
-        mult *= 10;
+    for(int i = strlen(number) - 1; i >= 0; i--) {
+        if(number[i] == '-') {
+            val *= -1;
+            continue;
+        }
+        
+        if (number[i] - '0' >= 0 && number[i] - '0' <= 9) {
+            val += (number[i] - '0') * mult;
+            mult *= 10;
+        }
     }
 
-    return number[0] == '-' ? val * -1 : val;
+    return val; //number[0] == '-' ? val * -1 : val;
 }
 
 /**
