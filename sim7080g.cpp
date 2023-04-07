@@ -54,13 +54,15 @@ SIM7080G::SIM7080G(bool openUART) {
 
 //
 void SIM7080G::PowerUp() {
-#if defined SIM7080G_DEBUG_ALL
+#if defined SIM7080G_DEBUG_ALL || defined SIM7080G_DEBUG
     uartDebugInterface.printf("DEBUG START: PowerUp()\n");
 #endif
     //Test if device is already powered up
     if (TestUART()){
 #if defined SIM7080G_DEBUG_ALL || defined SIM7080G_DEBUG
         uartDebugInterface.printf("\tDevice already powered up! Nothing to do here...\nDEBUG END: PowerUp()\n");
+#elif defined SIM7080G_VERBOSE
+        uartDebugInterface.printf("\tSIM7080G - Device already powered up! Nothing to do here...\n");
 #endif
         pwrState = SIM_PWUP;
         return;
@@ -68,8 +70,10 @@ void SIM7080G::PowerUp() {
 
     //Power cycle device
     if(pwrState == SIM_PWDN) {
-#if defined SIM7080G_DEBUG_ALL
-        uartDebugInterface.printf("\tPowering up device now...\nDEBUG END: PowerUp()\n");
+#if defined SIM7080G_DEBUG_ALL || defined SIM7080G_DEBUG
+        uartDebugInterface.printf("\tPowering up device...\nDEBUG END: PowerUp()\n");
+#elif defined SIM7080G_VERBOSE
+        uartDebugInterface.printf("\tSIM7080G - Powering up device...\n");
 #endif
         pwrState = SIM_PWUP;
         PowerCycle();
@@ -184,17 +188,21 @@ size_t SIM7080G::SendCommand(char* command, char* response) {
 bool SIM7080G::SendCommand(char* command) {
     size_t bytesRecv = SendCommand(command, rxBufer);
 
+    bool result = bytesRecv >= 2 && rxBufer[bytesRecv - 2] == '0';
+
 #if defined SIM7080G_DEBUG_ALL || defined SIM7080G_DEBUG
     //Command debug
     uartDebugInterface.printf("DEBUG START: SendCommand(char*)\n");
     if(bytesRecv >= 2)
-        uartDebugInterface.printf("\tCommand result: %c - %s\n", rxBufer[bytesRecv - 2], (bytesRecv >= 2 && rxBufer[bytesRecv - 2] == '0' ? "SUCCESSFUL" : "FAILED"));
+        uartDebugInterface.printf("\tCommand result: %c - %s\n", rxBufer[bytesRecv - 2], (result ? "SUCCESSFUL" : "FAILED"));
     else
         uartDebugInterface.printf("\tNot enough bytes received! Bytes received: %d\n", bytesRecv);
     uartDebugInterface.printf("Debug message END: SendCommand(char*)\n");
+#elif defined SIM7080G_VERBOSE
+    uartDebugInterface.printf("\tSIM7080G - Command: %s | Result: %s\n", command, (result ? "SUCCESSFUL" : "FAILED"));
 #endif
 
-    return bytesRecv >= 2 && rxBufer[bytesRecv - 2] == '0';
+    return result;
 }
 
 //
@@ -220,21 +228,59 @@ uint64_t SIM7080G::GetBaudrate() const { return uartBaudrate; }
 
 //
 bool SIM7080G::TestUART() {
-    //FlushUART();
     return SendCommand("AT+CGMI=?\r");
 }
 
 void SIM7080G::SetTAResponseFormat(bool textResponse) {
-    //FlushUART();
-    if(textResponse)
-        SendCommand("ATV1\r");
-    else
-        SendCommand("ATV0\r");
+    SendCommand(textResponse ? (char*)"ATV1\r" : (char*)"ATV0\r");
 }
 
-void SIM7080G::NOOP() {
-    SendCommand("\r");
-}
+//  #
+//  #   Cellular communication
+//  #
+
+//
+//uint16_t SIM7080G::GetNetworkReg(void) {}
+
+
+//uint8_t SIM7080G::GetSignalQuality() {}
+
+
+//void SIM7080G::GetCellOperators(HardwareSerial& debugInterface);
+
+
+//size_t SIM7080G::GetCellOperators(char* dst);
+
+
+//void SIM7080G::SetCellOperator(char* opName);
+
+
+//uint8_t SIM7080G::GetCellFunction(void);
+
+
+//void SIM7080G::SetCellFunction(uint8_t functionCode);
+
+
+//void SIM7080G::GetTime(char* dst);
+
+
+//void SIM7080G::EnterPIN(char* pin);
+
+
+//bool SIM7080G::GetPINStatus(void);
+
+
+//void SIM7080G::ActivateNetwork(void);
+
+
+//void SIM7080G::DeactivateNetwork(void);
+
+
+//bool SIM7080G::GetNetworkStatus(void);
+
+//  #
+//  #   HTTP(S) applications
+//  #
 
 //  #
 //  #   GNSS Application
@@ -258,10 +304,12 @@ bool SIM7080G::HotStartGNSS() { return SendCommand("AT+CGNSHOT\r"); }
 //
 void SIM7080G::GetGNSS(SIM7080G_GNSS* dst) {
 
-    //get GNSS info from device
+    //Get GNSS info from device
     size_t bytesrecv = SendCommand("AT+CGNSINF\r", rxBufer);
 
-    
+#if defined SIM7080G_VERBOSE
+    uartDebugInterface.printf("\tSIM7080G - GNSS update requested: %s\n", rxBufer);
+#endif
     
     uint8_t comas = 0;      //Track number of comas in response text
     uint8_t infCntr = 0;    //For indexing SIM7080G_GNSS arrays
@@ -323,9 +371,9 @@ SIM7080G_GNSS SIM7080G::GetGNSS(void) {
 //  #   Power
 //  #
 
-//uint16_t SIM7080G::GetVBat(void) const {
+uint16_t SIM7080G::GetVBat(void) const {
 
-//}
+}
 
 //  #
 //  #   Private functions

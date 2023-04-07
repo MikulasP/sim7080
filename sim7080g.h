@@ -6,7 +6,8 @@
 //#define SIM7080G_VERBOSE        //Send debug messages to a secondary serial interface
 
 //#define SIM7080G_DEBUG_ALL      //Debug every function in detail
-#define SIM7080G_DEBUG          //Normal debug messages from most of the functions
+//#define SIM7080G_DEBUG          //Normal debug messages from most of the functions
+#define SIM7080G_VERBOSE        //Send control messages to debug interface
 
 //Module power states
 enum SIM7080G_PWR {
@@ -52,7 +53,7 @@ class SIM7080G {
     //size_t uartRecvtimeout = 5000;            //Wait this ammount of ms after last received byte before returning. ( used in Receive() )
                                                 //if 0 timeout will be ignored
 
-    uint32_t uartResponseTimeout = 0;    //Time to wait before reading response from device
+    uint32_t uartResponseTimeout = 50;    //Time to wait before reading response from device
 
     char rxBufer[uartMaxRecvSize];
     //char txBuffer[100];
@@ -65,7 +66,7 @@ class SIM7080G {
     bool uartOpen = false;                      //UART interface state
     SIM7080G_PWR pwrState = SIM_PWDN;           //Power state
 
-#if defined SIM7080G_DEBUG_ALL || defined SIM7080G_DEBUG
+#if defined SIM7080G_DEBUG_ALL || defined SIM7080G_DEBUG || defined SIM7080G_VERBOSE
 
     //UART debug interface
     HardwareSerial& uartDebugInterface = Serial;
@@ -223,12 +224,6 @@ public:
     void SetTAResponseFormat(bool textResponse = false);
     //*OK
 
-    /**
-     * 
-    */
-    void NOOP(void);
-    //*OK
-
     //  #
     //  #   Cellular communication
     //  #
@@ -244,7 +239,7 @@ public:
     /**
      *  @brief Get cellular signal quality report
      * 
-     *  @return First 4 bit: rssi | last 4 bit: ber
+     *  @return RSSI
     */
     uint8_t GetSignalQuality(void) const;
     //TODO
@@ -306,7 +301,7 @@ public:
      * 
      *  @param pin          SIM PIN code
     */
-    void EnterPIN(uint16_t pin);
+    void EnterPIN(char* pin);
     //TODO
 
     /**
