@@ -3,7 +3,10 @@
 
 #include <Arduino.h>
 
-#define SIM7080G_VERBOSE        //Send debug messages to a secondary serial interface
+//#define SIM7080G_VERBOSE        //Send debug messages to a secondary serial interface
+
+//#define SIM7080G_DEBUG_ALL      //Debug every function in detail
+#define SIM7080G_DEBUG          //Normal debug messages from most of the functions
 
 //Module power states
 enum SIM7080G_PWR {
@@ -39,34 +42,42 @@ class SIM7080G {
 
     //Serial communication
 
-    const uint8_t uartTX = 47;                  //UART TX pin
-    const uint8_t uartRX = 48;                  //UART RX pin
+    uint8_t uartTX = 47;                  //UART TX pin
+    uint8_t uartRX = 48;                  //UART RX pin
 
     uint64_t uartBaudrate = 921600;             //UART Baudrate     (921600)
     HardwareSerial& uartInterface = Serial1;    //UART interface to use
 
-    const static size_t uartMaxRecvSize = 1000; //Max number of bytes to receive (to prevent buffer overflow)
+    const static size_t uartMaxRecvSize = 1024; //Max number of bytes to receive (Must be divisible by 4)
     //size_t uartRecvtimeout = 5000;            //Wait this ammount of ms after last received byte before returning. ( used in Receive() )
                                                 //if 0 timeout will be ignored
 
-    const uint8_t uartResponseTimeout = 100;    //Time to wait before reading response from device
+    uint32_t uartResponseTimeout = 0;    //Time to wait before reading response from device
 
     char rxBufer[uartMaxRecvSize];
+    //char txBuffer[100];
 
     //Power control
-    const uint8_t dtrKey = 14;                  //Send module to light sleep (active high)
-    const uint8_t pwrKey = 21;                  //Power on/off the module
+    uint8_t dtrKey = 14;                  //Send module to light sleep (active high) DEPRECATED IN V2!! (no dtr pin in PCB V2)
+    uint8_t pwrKey = 21;                  //Power on/off the module
 
     //
     bool uartOpen = false;                      //UART interface state
     SIM7080G_PWR pwrState = SIM_PWDN;           //Power state
+
+#if defined SIM7080G_DEBUG_ALL || defined SIM7080G_DEBUG
+
+    //UART debug interface
+    HardwareSerial& uartDebugInterface = Serial;
+
+#endif
 
 public:
 
     /**
      *  @brief Constructor
     */
-    SIM7080G(void);
+    SIM7080G(bool openUART = true);
     //*OK
 
     //
@@ -196,6 +207,26 @@ public:
      *  @return Number of bytes actually received
     */
     size_t Receive(uint8_t* dst, size_t len = 0);
+    //*OK
+
+    /**
+     *  @brief Test UART communication with device.
+     * 
+     *  @return True: Communcation OK | False: No response from device
+    */
+    bool TestUART(void);
+    //*OK
+
+    /**
+     * 
+    */
+    void SetTAResponseFormat(bool textResponse = false);
+    //*OK
+
+    /**
+     * 
+    */
+    void NOOP(void);
     //*OK
 
     //  #
@@ -388,6 +419,13 @@ private:
     */
     inline void PowerCycle(void);
     //*OK
+
+    /**
+     *  @brief Erase RX Buffer
+     * 
+     *  @param value            Erase buffer with this value
+    */
+    void EraseRXBuff(uint32_t value = 0x04040404);
 
 };
 
