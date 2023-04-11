@@ -3,8 +3,6 @@
 
 #include <Arduino.h>
 
-//#define SIM7080G_VERBOSE        //Send debug messages to a secondary serial interface
-
 //#define SIM7080G_DEBUG_ALL      //Debug every function in detail
 //#define SIM7080G_DEBUG          //Normal debug messages from most of the functions
 #define SIM7080G_VERBOSE        //Send control messages to debug interface
@@ -16,12 +14,18 @@ enum SIM7080G_PWR {
     SIM_SLEEP       //Hardware sleep
 };
 
+struct SIM7080G_CNACT {
+    uint8_t pdidx = 0xFF;
+    uint8_t statusx = 0xFF;
+    uint8_t ipv4[4] = {255, 255, 255, 255};
+};
+
 struct SIM7080G_GNSS {
-    uint8_t run;            //Run status
+    uint8_t run = 0;            //Run status
     //uint8_t fix;            //Fix status
-    char datetime[19];      //UTC date & time
-    char latitude[11];      //Latitude
-    char longitude[12];     //Longitude
+    char datetime[19] = {'\0'};      //UTC date & time
+    char latitude[11] = {'\0'};      //Latitude
+    char longitude[12] = {'\0'};     //Longitude
     //char mslAltitude[9];    //MSL Altitude
     //char sog[7];            //speed Over Ground
     //char cog[7];            //Course Over Ground
@@ -30,9 +34,9 @@ struct SIM7080G_GNSS {
     //char hdop[5];           //HDOP
     //char pdop[5];           //PDOP
     //char vdop[5];           //VDOP
-    uint8_t gpsSat;         //GPS Satellites in view
-    uint8_t gnssSat;        //GNSS Satellites in view
-    uint8_t glonassSat;     //GLONASS Satellites in view
+    uint8_t gpsSat = 0;         //GPS Satellites in view
+    uint8_t gnssSat = 0;        //GNSS Satellites in view
+    uint8_t glonassSat = 0;     //GLONASS Satellites in view
     //uint8_t cn0Max;         //C/N0 Max
     //char hpa[7];            //HPA
     //char vpa[7];            //VPA
@@ -49,8 +53,8 @@ class SIM7080G {
     uint64_t uartBaudrate = 921600;             //UART Baudrate     (921600)
     HardwareSerial& uartInterface = Serial1;    //UART interface to use
 
-    const static size_t uartMaxRecvSize = 1024; //Max number of bytes to receive (Must be divisible by 4)
-    //size_t uartRecvtimeout = 5000;            //Wait this ammount of ms after last received byte before returning. ( used in Receive() )
+    const static size_t uartMaxRecvSize = 4096; //Max number of bytes to receive (Must be divisible by 4)
+    size_t uartRecvtimeout = 100;               //Wait this ammount of ms after last received byte before returning. ( used in Receive() )
                                                 //if 0 timeout will be ignored
 
     uint32_t uartResponseTimeout = 50;    //Time to wait before reading response from device
@@ -177,7 +181,7 @@ public:
      * 
      *  @return Number of bytes received as response (including null terminator)
     */
-    size_t SendCommand(char* command, char* response);
+    size_t SendCommand(char* command, char* response, uint32_t recvTimeout = 0);
     //*OK
 
     /**
@@ -187,7 +191,7 @@ public:
      * 
      *  @return 
     */
-    bool SendCommand(char* command);
+    bool SendCommand(char* command, uint32_t recvTimeout = 0);
     //*OK
 
     /**
@@ -231,9 +235,9 @@ public:
     /**
      *  @brief Get cellular network registration status
      * 
-     *  @return MSB: NRURC | LSB: Registration status (See SIM7080G AT Command Manual page 63)
+     *  @return Registration status (See SIM7080G AT Command Manual page 63)
     */
-    uint16_t GetNetworkReg(void) const;
+    uint8_t GetNetworkReg(void);
     //TODO
 
     /**
@@ -241,15 +245,15 @@ public:
      * 
      *  @return RSSI
     */
-    uint8_t GetSignalQuality(void) const;
-    //TODO
+    uint8_t GetSignalQuality(void);
+    //*OK
 
     /**
      *  @brief List available operators to serial debug interface
      * 
      *  @param debugInterface       
     */
-    void GetCellOperators(HardwareSerial& debugInterface) const;
+    void GetCellOperators(HardwareSerial& debugInterface);
     //TODO
 
     /**
@@ -265,7 +269,7 @@ public:
      * 
      *  @return Number of bytes written to dst
     */
-    size_t GetCellOperators(char* dst) const;
+    size_t GetCellOperators(char* dst);
     //TODO
 
     /**
@@ -279,7 +283,7 @@ public:
      * 
      *  @return Functionality code (See SIM7080G AT Command Manual page 70)
     */
-    uint8_t GetCellFunction(void) const;
+    uint8_t GetCellFunction(void);
     //TODO
 
     /**
@@ -293,7 +297,7 @@ public:
      * 
      *  @param dst          Char array to store time and date (min 21 characters long, including \0)
     */
-    void GetTime(char* dst) const;
+    void GetTime(char* dst);
     //TODO
 
     /**
@@ -301,31 +305,31 @@ public:
      * 
      *  @param pin          SIM PIN code
     */
-    void EnterPIN(char* pin);
-    //TODO
+    bool EnterPIN(char* pin, bool force = false);
+    //*OK
 
     /**
      *  @brief Get SIM PIN status
     */
     bool GetPINStatus(void);
-    //TODO
+    //*OK
 
     /**
      *  @brief Activate APP network
     */
-    void ActivateNetwork(void);
+    void ActivateNetwork(uint8_t pdpidx);
     //TODO
 
     /**
      *  @brief Deactivate APP network
     */
-    void DeactivateNetwork(void);
+    void DeactivateNetwork(uint8_t pdpidx);
     //TODO
 
     /**
      *  @brief Get APP network status
     */
-    bool GetNetworkStatus(void) const;
+    uint8_t GetNetworkStatus(uint8_t pdpidx);
     //TODO
 
 
@@ -343,31 +347,39 @@ public:
      *  @brief Power up GNSS
     */
     bool PowerUpGNSS(void);
-    //TODO test
+    //*OK
 
     /**
      *  @brief Power down GNSS
     */
     bool PowerDownGNSS(void);
-    //TODO test
+    //*OK
+
+    /**
+     *  @brief Get GNSS power state
+     * 
+     *  @returns GNSS power state
+    */
+    uint8_t GetGNSSPower(void);
+    //*OK
 
     /**
      *  @brief Cold start GNSS
     */
     bool ColdStartGNSS(void);
-    //TODO test
+    //*OK
 
     /**
      *  @brief Warm start GNSS
     */
     bool WarmStartGNSS(void);
-    //TODO test
+    //*OK
 
     /**
      *  @brief Hot start GNSS
     */
     bool HotStartGNSS(void);
-    //TODO test
+    //*OK
 
     /**
      *  @brief Get GNSS Information
@@ -375,7 +387,7 @@ public:
      *  @param dst              Struct to store GNSS info
     */
     void GetGNSS(SIM7080G_GNSS* dst);
-    //TODO test
+    //*OK
 
     /**
      *  @brief Get GNSS Information
@@ -383,7 +395,7 @@ public:
      *  @return GNSS Info
     */
     SIM7080G_GNSS GetGNSS(void);
-    //TODO test
+    //*OK
 
     //  #
     //  #   Power Info

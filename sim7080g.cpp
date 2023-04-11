@@ -44,8 +44,10 @@ SIM7080G::SIM7080G(bool openUART) {
     pinMode(dtrKey, OUTPUT);
     digitalWrite(dtrKey, LOW);
 
-    if(openUART)
+    if(openUART) {
         OpenUART();
+        SetTAResponseFormat();
+    }
 }
 
 //  #
@@ -77,6 +79,8 @@ void SIM7080G::PowerUp() {
 #endif
         pwrState = SIM_PWUP;
         PowerCycle();
+        delay(2000);    //Min delay specified is 1.8s
+        SetTAResponseFormat();
     }
 }
 
@@ -145,13 +149,13 @@ size_t SIM7080G::AvailableUART() {
 }
 
 //
-size_t SIM7080G::SendCommand(char* command, char* response) {
+size_t SIM7080G::SendCommand(char* command, char* response, uint32_t recvTimeout) {
     //Send command
     uartInterface.print(command);
     //uartInterface.write("\r");
 
     //Wait for response
-    delay(uartResponseTimeout);
+    delay(recvTimeout ? recvTimeout : uartRecvtimeout);
 
     //Read data from device
     size_t bytesRecv = 0;
@@ -185,8 +189,8 @@ size_t SIM7080G::SendCommand(char* command, char* response) {
 }
 
 //
-bool SIM7080G::SendCommand(char* command) {
-    size_t bytesRecv = SendCommand(command, rxBufer);
+bool SIM7080G::SendCommand(char* command, uint32_t recvTimeout) {
+    size_t bytesRecv = SendCommand(command, rxBufer, recvTimeout);
 
     bool result = bytesRecv >= 2 && rxBufer[bytesRecv - 2] == '0';
 
@@ -240,10 +244,31 @@ void SIM7080G::SetTAResponseFormat(bool textResponse) {
 //  #
 
 //
-//uint16_t SIM7080G::GetNetworkReg(void) {}
+uint8_t SIM7080G::GetNetworkReg(void) {
+    size_t bytesRecv = SendCommand("AT+CREG?\r", rxBufer);
+    uint8_t status = *(strrchr(rxBufer, ',') + 1) - '0';
+#if defined SIM7080G_VERBOSE
+    uartDebugInterface.printf("\tSIM7080G - Network Registration status: %d\n", status);
+#endif
+    return status;
+}
 
 
-//uint8_t SIM7080G::GetSignalQuality() {}
+uint8_t SIM7080G::GetSignalQuality() {
+    
+    size_t bytesRecv = SendCommand("AT+CSQ\r", rxBufer);
+
+    char* startPtr = rxBufer;
+    while ((*startPtr) != ':' && (*startPtr) != '\0')
+        startPtr++;
+    startPtr++;     //Step forward another
+
+    uint8_t offset = 0;
+    for (; startPtr[offset] != ',' && startPtr[offset] != '\0'; offset++);
+
+    //Check against mem overflow
+    return bytesRecv <= uartMaxRecvSize && startPtr + 2 <= rxBufer + uartMaxRecvSize ? CharToNmbr(startPtr, offset) : 99;
+}
 
 
 //void SIM7080G::GetCellOperators(HardwareSerial& debugInterface);
@@ -263,21 +288,59 @@ void SIM7080G::SetTAResponseFormat(bool textResponse) {
 
 //void SIM7080G::GetTime(char* dst);
 
+//
+bool SIM7080G::EnterPIN(char* pin, bool force) {
+#if defined SIM7080G_DEBUG || defined SIM7080G_DEBUG_ALL
+    uartDebugInterface.printf("DEBUG START: EnterPin(%s)\n", pin);
+#endif
+    
+    //SIM PIN is already entered
+    if (GetPINStatus()) {
+#if defined SIM7080G_DEBUG || defined SIM7080G_DEBUG_ALL
+        uartDebugInterface.printf("\tSIM PIN READY\nDEBUG END: EnterPin(%s)\n", pin);
+#elif defined SIM7080G_VERBOSE
+        uartDebugInterface.printf("\tSIM7080G - SIM PIN is already entered!\n");
+#endif
+        return true;
+    }
 
-//void SIM7080G::EnterPIN(char* pin);
+    if (strlen(pin) == 4)
+    {
+#if defined SIM7080G_DEBUG || defined SIM7080G_DEBUG_ALL
+        uartDebugInterface.printf("\tPin format OK!\nDEBUG END: EnterPin(%s)\n", pin);
+#endif
+        char tmpBuff[14] = {'A', 'T', '+', 'C', 'P', 'I', 'N', '=', '*', '*', '*', '*', '\r', '\0'};
+        memcpy(tmpBuff + 8, pin, 4);
+        return SendCommand(tmpBuff);
+    }
+#if defined SIM7080G_DEBUG || defined SIM7080G_DEBUG_ALL
+    uartDebugInterface.printf("\tPin format ERROR!\nDEBUG END: EnterPin(%s)\n", pin);
+#elif defined SIM7080G_VERBOSE
+    uartDebugInterface.printf("SIM7080G - SIM PIN format ERROR!");
+#endif
+    return false;
+}
 
 
-//bool SIM7080G::GetPINStatus(void);
+bool SIM7080G::GetPINStatus(void) {
+    SendCommand("AT+CPIN?\r", rxBufer);
+    return strstr(rxBufer, "READY");
+}
 
+//
+/*
+void SIM7080G::ActivateNetwork(uint8_t pdpidx) {
+}
 
-//void SIM7080G::ActivateNetwork(void);
+//
+void SIM7080G::DeactivateNetwork(uint8_t pdpidx) {
+}
 
+//
+SIM7080G_CNACT SIM7080G::GetNetworkStatus(uint8_t pdpidx) {
+}
 
-//void SIM7080G::DeactivateNetwork(void);
-
-
-//bool SIM7080G::GetNetworkStatus(void);
-
+*/
 //  #
 //  #   HTTP(S) applications
 //  #
@@ -287,19 +350,29 @@ void SIM7080G::SetTAResponseFormat(bool textResponse) {
 //  #
 
 //
-bool SIM7080G::PowerUpGNSS() { return SendCommand("AT+CGNSPWR=1\r"); }
+bool SIM7080G::PowerUpGNSS() { return GetGNSSPower() ? true : SendCommand("AT+CGNSPWR=1\r"); }
 
 //
-bool SIM7080G::PowerDownGNSS() { return SendCommand("AT+CGNSPWR=0\r"); }
+bool SIM7080G::PowerDownGNSS() { return GetGNSSPower() ? SendCommand("AT+CGNSPWR=0\r") : true; }
 
 //
-bool SIM7080G::ColdStartGNSS() { return SendCommand("AT+CGNSCOLD\r"); }
+uint8_t SIM7080G::GetGNSSPower() {
+    size_t bytesRecv = SendCommand("AT+CGNSPWR?\r", rxBufer);
+    uint8_t status = rxBufer[bytesRecv - 5] - '0';
+#if defined SIM7080G_VERBOSE
+    uartDebugInterface.printf("\tSIM7080G - GNSS Power status: %d\n", status);
+#endif
+    return status;
+}
 
 //
-bool SIM7080G::WarmStartGNSS() { return SendCommand("AT+CGNSWARM\r"); }
+bool SIM7080G::ColdStartGNSS() { return SendCommand("AT+CGNSCOLD\r", 2000); }
 
 //
-bool SIM7080G::HotStartGNSS() { return SendCommand("AT+CGNSHOT\r"); }
+bool SIM7080G::WarmStartGNSS() { return SendCommand("AT+CGNSWARM\r", 2000); }
+
+//
+bool SIM7080G::HotStartGNSS() { return SendCommand("AT+CGNSHOT\r", 2000); }
 
 //
 void SIM7080G::GetGNSS(SIM7080G_GNSS* dst) {
@@ -311,7 +384,7 @@ void SIM7080G::GetGNSS(SIM7080G_GNSS* dst) {
     uartDebugInterface.printf("\tSIM7080G - GNSS update requested: %s\n", rxBufer);
 #endif
     
-    uint8_t comas = 0;      //Track number of comas in response text
+    uint8_t comas = 0;      //Track comas in response text
     uint8_t infCntr = 0;    //For indexing SIM7080G_GNSS arrays
 
     for (uint8_t i = 0; i < bytesrecv; i++) {
