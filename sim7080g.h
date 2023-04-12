@@ -47,8 +47,8 @@ class SIM7080G {
 
     //Serial communication
 
-    uint8_t uartTX = 47;                  //UART TX pin
-    uint8_t uartRX = 48;                  //UART RX pin
+    uint8_t uartTX = 0;                  //UART TX pin
+    uint8_t uartRX = 0;                  //UART RX pin
 
     uint64_t uartBaudrate = 921600;             //UART Baudrate     (921600)
     HardwareSerial& uartInterface = Serial1;    //UART interface to use
@@ -63,8 +63,8 @@ class SIM7080G {
     //char txBuffer[100];
 
     //Power control
-    uint8_t dtrKey = 14;                  //Send module to light sleep (active high) DEPRECATED IN V2!! (no dtr pin in PCB V2)
-    uint8_t pwrKey = 21;                  //Power on/off the module
+    int dtrKey = -1;                        //Send module to light sleep (active high) DEPRECATED IN V2!! (no dtr pin in PCB V2)
+    uint8_t pwrKey = 0;                    //Power on/off the module
 
     //
     bool uartOpen = false;                      //UART interface state
@@ -82,11 +82,17 @@ public:
     /**
      *  @brief Constructor
     */
-    SIM7080G(bool openUART = true);
+    SIM7080G(uint8_t rx, uint8_t tx, uint8_t pwr, int dtr = -1, bool openUART = true);
     //*OK
 
     //
     //  IO / Power control
+    //
+
+    /**
+     * 
+    */
+    void SetDTR(int dtr);
     //
 
     /**
@@ -181,7 +187,7 @@ public:
      * 
      *  @return Number of bytes received as response (including null terminator)
     */
-    size_t SendCommand(char* command, char* response, uint32_t recvTimeout = 0);
+    size_t SendCommand(const char* command, char* response, uint32_t recvTimeout = 0);
     //*OK
 
     /**
@@ -191,7 +197,7 @@ public:
      * 
      *  @return 
     */
-    bool SendCommand(char* command, uint32_t recvTimeout = 0);
+    bool SendCommand(const char* command, uint32_t recvTimeout = 0);
     //*OK
 
     /**
@@ -275,7 +281,7 @@ public:
     /**
      *  @brief Select cellular operator to use
     */
-    void SetCellOperator(char* opName);
+    void SetCellOperator(const char* opName);
     //TODO
 
     /**
@@ -305,7 +311,7 @@ public:
      * 
      *  @param pin          SIM PIN code
     */
-    bool EnterPIN(char* pin, bool force = false);
+    bool EnterPIN(const char* pin, bool force = false);
     //*OK
 
     /**

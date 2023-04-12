@@ -39,10 +39,17 @@ int CharToNmbr(char* number, size_t len = 0) {
 }
 
 //
-SIM7080G::SIM7080G(bool openUART) {
+SIM7080G::SIM7080G(uint8_t rx, uint8_t tx, uint8_t pwr, int dtr, bool openUART) {
+    this->uartRX = rx;
+    this->uartTX = tx;
+    this->pwrKey = pwr;
+    this->dtrKey = dtr;
+
     //Setup DTR key
-    pinMode(dtrKey, OUTPUT);
-    digitalWrite(dtrKey, LOW);
+    if (dtr >= 0) {
+        pinMode(dtrKey, OUTPUT);
+        digitalWrite(dtrKey, LOW);
+    }
 
     if(openUART) {
         OpenUART();
@@ -53,6 +60,14 @@ SIM7080G::SIM7080G(bool openUART) {
 //  #
 //  #   IO / Power control
 //  #
+
+void SIM7080G::SetDTR(int dtr) {
+    //Setup DTR key
+    if (dtr >= 0) {
+        pinMode(dtrKey, OUTPUT);
+        digitalWrite(dtrKey, LOW);
+    }
+}
 
 //
 void SIM7080G::PowerUp() {
@@ -149,7 +164,7 @@ size_t SIM7080G::AvailableUART() {
 }
 
 //
-size_t SIM7080G::SendCommand(char* command, char* response, uint32_t recvTimeout) {
+size_t SIM7080G::SendCommand(const char* command, char* response, uint32_t recvTimeout) {
     //Send command
     uartInterface.print(command);
     //uartInterface.write("\r");
@@ -189,7 +204,7 @@ size_t SIM7080G::SendCommand(char* command, char* response, uint32_t recvTimeout
 }
 
 //
-bool SIM7080G::SendCommand(char* command, uint32_t recvTimeout) {
+bool SIM7080G::SendCommand(const char* command, uint32_t recvTimeout) {
     size_t bytesRecv = SendCommand(command, rxBufer, recvTimeout);
 
     bool result = bytesRecv >= 2 && rxBufer[bytesRecv - 2] == '0';
@@ -289,7 +304,7 @@ uint8_t SIM7080G::GetSignalQuality() {
 //void SIM7080G::GetTime(char* dst);
 
 //
-bool SIM7080G::EnterPIN(char* pin, bool force) {
+bool SIM7080G::EnterPIN(const char* pin, bool force) {
 #if defined SIM7080G_DEBUG || defined SIM7080G_DEBUG_ALL
     uartDebugInterface.printf("DEBUG START: EnterPin(%s)\n", pin);
 #endif
@@ -444,9 +459,7 @@ SIM7080G_GNSS SIM7080G::GetGNSS(void) {
 //  #   Power
 //  #
 
-uint16_t SIM7080G::GetVBat(void) const {
-
-}
+//uint16_t SIM7080G::GetVBat(void) const {}
 
 //  #
 //  #   Private functions
