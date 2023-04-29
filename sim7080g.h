@@ -14,10 +14,10 @@ enum SIM7080G_PWR {
     SIM_SLEEP       //Hardware sleep
 };
 
-struct SIM7080G_CNACT {
+struct SIM7080G_APPN {
     uint8_t pdidx = 0xFF;
     uint8_t statusx = 0xFF;
-    uint8_t ipv4[4] = {255, 255, 255, 255};
+    char ipv4[16] = { '\0' };
 };
 
 struct SIM7080G_GNSS {
@@ -41,6 +41,13 @@ struct SIM7080G_GNSS {
     //char hpa[7];            //HPA
     //char vpa[7];            //VPA
 
+};
+
+struct SIM7080G_HTTPCONF {
+    const char* url;
+    uint16_t bodylen = 0;
+    uint16_t headerlen = 0;
+    uint8_t method;     //GET = 1, PUT = 2, POST = 3
 };
 
 class SIM7080G {
@@ -73,7 +80,8 @@ class SIM7080G {
 #if defined SIM7080G_DEBUG_ALL || defined SIM7080G_DEBUG || defined SIM7080G_VERBOSE
 
     //UART debug interface
-    HardwareSerial& uartDebugInterface = Serial;
+    //HardwareSerial& uartDebugInterface = Serial;
+    HWCDC& uartDebugInterface = Serial;
 
 #endif
 
@@ -323,27 +331,43 @@ public:
     /**
      *  @brief Activate APP network
     */
-    void ActivateNetwork(uint8_t pdpidx);
-    //TODO
+    bool ActivateAppNetwork(void);
+    //*OK
 
     /**
      *  @brief Deactivate APP network
     */
-    void DeactivateNetwork(uint8_t pdpidx);
-    //TODO
+    bool DeactivateAppNetwork(void);
+    //*OK
 
     /**
      *  @brief Get APP network status
     */
-    uint8_t GetNetworkStatus(uint8_t pdpidx);
-    //TODO
+    uint8_t GetAppNetworkStatus(void);
+    //*OK
+
+    /**
+     *  @brief Get App Network details
+     * 
+     *  @param info Pointer to SIM7080G_APPN struct to store APP network details
+    */
+    void GetAppNetworkInfo(SIM7080G_APPN* info);
+    //*OK
+
+    /**
+     *  @brief Get App Network details
+     * 
+     *  @returns SIM7080G_APPN struct containing APP network details
+    */
+    SIM7080G_APPN GetAppNetworkInfo(void);
+    //*OK
 
 
     //  #
     //  #   HTTP(S) applications
     //  #
 
-
+    uint16_t SendRequestHTTP(SIM7080G_HTTPCONF* httpConf);
 
     //  #
     //  #   GNSS 

@@ -197,7 +197,7 @@ size_t SIM7080G::SendCommand(const char* command, char* response, uint32_t recvT
     else
         printf("\tIgnoring return value.\n");
 
-    uartDebugInterface.printf("Debug message END: SendCommand(char*, char*)\n");
+    uartDebugInterface.printf("DEBUG END: SendCommand(char*, char*)\n");
 #endif
 
     return bytesRecv;
@@ -216,7 +216,7 @@ bool SIM7080G::SendCommand(const char* command, uint32_t recvTimeout) {
         uartDebugInterface.printf("\tCommand result: %c - %s\n", rxBufer[bytesRecv - 2], (result ? "SUCCESSFUL" : "FAILED"));
     else
         uartDebugInterface.printf("\tNot enough bytes received! Bytes received: %d\n", bytesRecv);
-    uartDebugInterface.printf("Debug message END: SendCommand(char*)\n");
+    uartDebugInterface.printf("DEBUG END: SendCommand(char*)\n");
 #elif defined SIM7080G_VERBOSE
     uartDebugInterface.printf("\tSIM7080G - Command: %s | Result: %s\n", command, (result ? "SUCCESSFUL" : "FAILED"));
 #endif
@@ -331,7 +331,7 @@ bool SIM7080G::EnterPIN(const char* pin, bool force) {
 #if defined SIM7080G_DEBUG || defined SIM7080G_DEBUG_ALL
     uartDebugInterface.printf("\tPin format ERROR!\nDEBUG END: EnterPin(%s)\n", pin);
 #elif defined SIM7080G_VERBOSE
-    uartDebugInterface.printf("SIM7080G - SIM PIN format ERROR!");
+    uartDebugInterface.printf("\tSIM7080G - SIM PIN format ERROR!");
 #endif
     return false;
 }
@@ -343,19 +343,73 @@ bool SIM7080G::GetPINStatus(void) {
 }
 
 //
-/*
-void SIM7080G::ActivateNetwork(uint8_t pdpidx) {
+
+bool SIM7080G::ActivateAppNetwork(void) {
+    if (GetAppNetworkStatus()) {
+#if defined SIM7080G_DEBUG || defined SIM7080G_DEBUG_ALL
+    uartDebugInterface.printf("DEBUG START: Deactivatenetwork(void)\n\tSIM7080G - APP Network is already active!\nDEBUG END: Deactivatenetwork(void)\n");
+#endif
+        return false;
+    }
+
+    SendCommand("AT+CNACT=0,1\r");
+
+    return GetAppNetworkStatus();  //Not the greatest, will do for now
 }
 
 //
-void SIM7080G::DeactivateNetwork(uint8_t pdpidx) {
+bool SIM7080G::DeactivateAppNetwork(void) {
+    if (!GetAppNetworkStatus()) {
+#if defined SIM7080G_DEBUG || defined SIM7080G_DEBUG_ALL
+    uartDebugInterface.printf("DEBUG START: Deactivatenetwork(void)\n\tSIM7080G - APP Network is already inactive!\nDEBUG END: Deactivatenetwork(void)\n");
+#endif
+        return false;
+    }
+
+    SendCommand("AT+CNACT=0,0\r");
+
+    return GetAppNetworkStatus();  //Same here...
 }
 
 //
-SIM7080G_CNACT SIM7080G::GetNetworkStatus(uint8_t pdpidx) {
+uint8_t SIM7080G::GetAppNetworkStatus(void) {
+    size_t bytesRecv = SendCommand("AT+CNACT?\r", rxBufer);
+    uint8_t status = *(strchr(rxBufer, ' ') + 3) - '0';  //Convert a number in char to integer
+#if defined SIM7080G_DEBUG || defined SIM7080G_DEBUG_ALL
+    uartDebugInterface.printf("DEBUG START: ActivateNetwork(void)\n");
+    uartDebugInterface.printf("\tAPP Network 0 Status:\n\tStatus offset: %d\n%s\n", status, strchr(rxBufer, ' ') - rxBufer + 3, rxBufer);
+    uartDebugInterface.printf("DEBUG END: ActivateNetwork(void)\n");
+#elif defined SIM7080G_VERBOSE
+    uartDebugInterface.printf("\tSIM7080G - APP Network status: %d\n", status);
+#endif
+
+    return status;
 }
 
-*/
+void SIM7080G::GetAppNetworkInfo(SIM7080G_APPN* info) {
+    if(info == NULL)
+        return;
+    SendCommand("AT+CGNACT?\r", rxBufer);
+    info->statusx = GetAppNetworkStatus();
+    info->pdidx = 0x00;
+    char* startPtr = strchr(rxBufer, '\"') + 1;
+    size_t charCntr = (strchr(startPtr, '\"') - startPtr - 1);
+
+    //Check against nullptr or wrong IP address length calculation
+    if (startPtr == NULL || charCntr < 7 || charCntr > 15) //IP should be at leas 7 or at max 15 characters
+        return;
+
+    strncpy(info->ipv4, startPtr, charCntr);
+    info->ipv4[charCntr] = '\0';
+}
+
+SIM7080G_APPN SIM7080G::GetAppNetworkInfo(void) {
+    SIM7080G_APPN info;
+    GetAppNetworkInfo(&info);
+    return info;
+}
+
+
 //  #
 //  #   HTTP(S) applications
 //  #
@@ -381,13 +435,13 @@ uint8_t SIM7080G::GetGNSSPower() {
 }
 
 //
-bool SIM7080G::ColdStartGNSS() { return SendCommand("AT+CGNSCOLD\r", 2000); }
+bool SIM7080G::ColdStartGNSS() { return GetGNSSPower() ? true : SendCommand("AT+CGNSCOLD\r", 2000); }
 
 //
-bool SIM7080G::WarmStartGNSS() { return SendCommand("AT+CGNSWARM\r", 2000); }
+bool SIM7080G::WarmStartGNSS() { return GetGNSSPower() ? true : SendCommand("AT+CGNSWARM\r", 2000); }
 
 //
-bool SIM7080G::HotStartGNSS() { return SendCommand("AT+CGNSHOT\r", 2000); }
+bool SIM7080G::HotStartGNSS() { return GetGNSSPower() ? true : SendCommand("AT+CGNSHOT\r", 2000); }
 
 //
 void SIM7080G::GetGNSS(SIM7080G_GNSS* dst) {
