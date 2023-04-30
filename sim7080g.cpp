@@ -1,9 +1,6 @@
 //Header files
 #include "sim7080g.h"
 
-#include <stdio.h>
-
-
 //  "It ain't much but it's honest work"
 /**
  *  @brief Convert integer from string to int
@@ -205,15 +202,15 @@ size_t SIM7080G::SendCommand(const char* command, char* response, uint32_t recvT
 
 //
 bool SIM7080G::SendCommand(const char* command, uint32_t recvTimeout) {
-    size_t bytesRecv = SendCommand(command, rxBufer, recvTimeout);
+    size_t bytesRecv = SendCommand(command, rxBuffer, recvTimeout);
 
-    bool result = bytesRecv >= 2 && rxBufer[bytesRecv - 2] == '0';
+    bool result = bytesRecv >= 2 && rxBuffer[bytesRecv - 2] == '0';
 
 #if defined SIM7080G_DEBUG_ALL || defined SIM7080G_DEBUG
     //Command debug
     uartDebugInterface.printf("DEBUG START: SendCommand(char*)\n");
     if(bytesRecv >= 2)
-        uartDebugInterface.printf("\tCommand result: %c - %s\n", rxBufer[bytesRecv - 2], (result ? "SUCCESSFUL" : "FAILED"));
+        uartDebugInterface.printf("\tCommand result: %c - %s\n", rxBuffer[bytesRecv - 2], (result ? "SUCCESSFUL" : "FAILED"));
     else
         uartDebugInterface.printf("\tNot enough bytes received! Bytes received: %d\n", bytesRecv);
     uartDebugInterface.printf("DEBUG END: SendCommand(char*)\n");
@@ -260,8 +257,8 @@ void SIM7080G::SetTAResponseFormat(bool textResponse) {
 
 //
 uint8_t SIM7080G::GetNetworkReg(void) {
-    size_t bytesRecv = SendCommand("AT+CREG?\r", rxBufer);
-    uint8_t status = *(strrchr(rxBufer, ',') + 1) - '0';
+    size_t bytesRecv = SendCommand("AT+CREG?\r", rxBuffer);
+    uint8_t status = *(strrchr(rxBuffer, ',') + 1) - '0';
 #if defined SIM7080G_VERBOSE
     uartDebugInterface.printf("\tSIM7080G - Network Registration status: %d\n", status);
 #endif
@@ -271,9 +268,9 @@ uint8_t SIM7080G::GetNetworkReg(void) {
 
 uint8_t SIM7080G::GetSignalQuality() {
     
-    size_t bytesRecv = SendCommand("AT+CSQ\r", rxBufer);
+    size_t bytesRecv = SendCommand("AT+CSQ\r", rxBuffer);
 
-    char* startPtr = rxBufer;
+    char* startPtr = rxBuffer;
     while ((*startPtr) != ':' && (*startPtr) != '\0')
         startPtr++;
     startPtr++;     //Step forward another
@@ -282,7 +279,7 @@ uint8_t SIM7080G::GetSignalQuality() {
     for (; startPtr[offset] != ',' && startPtr[offset] != '\0'; offset++);
 
     //Check against mem overflow
-    return bytesRecv <= uartMaxRecvSize && startPtr + 2 <= rxBufer + uartMaxRecvSize ? CharToNmbr(startPtr, offset) : 99;
+    return bytesRecv <= uartMaxRecvSize && startPtr + 2 <= rxBuffer + uartMaxRecvSize ? CharToNmbr(startPtr, offset) : 99;
 }
 
 
@@ -338,8 +335,8 @@ bool SIM7080G::EnterPIN(const char* pin, bool force) {
 
 
 bool SIM7080G::GetPINStatus(void) {
-    SendCommand("AT+CPIN?\r", rxBufer);
-    return strstr(rxBufer, "READY");
+    SendCommand("AT+CPIN?\r", rxBuffer);
+    return strstr(rxBuffer, "READY");
 }
 
 //
@@ -373,11 +370,11 @@ bool SIM7080G::DeactivateAppNetwork(void) {
 
 //
 uint8_t SIM7080G::GetAppNetworkStatus(void) {
-    size_t bytesRecv = SendCommand("AT+CNACT?\r", rxBufer);
-    uint8_t status = *(strchr(rxBufer, ' ') + 3) - '0';  //Convert a number in char to integer
+    size_t bytesRecv = SendCommand("AT+CNACT?\r", rxBuffer);
+    uint8_t status = *(strchr(rxBuffer, ' ') + 3) - '0';  //Convert a number in char to integer
 #if defined SIM7080G_DEBUG || defined SIM7080G_DEBUG_ALL
     uartDebugInterface.printf("DEBUG START: ActivateNetwork(void)\n");
-    uartDebugInterface.printf("\tAPP Network 0 Status:\n\tStatus offset: %d\n%s\n", status, strchr(rxBufer, ' ') - rxBufer + 3, rxBufer);
+    uartDebugInterface.printf("\tAPP Network 0 Status:\n\tStatus offset: %d\n%s\n", status, strchr(rxBuffer, ' ') - rxBuffer + 3, rxBuffer);
     uartDebugInterface.printf("DEBUG END: ActivateNetwork(void)\n");
 #elif defined SIM7080G_VERBOSE
     uartDebugInterface.printf("\tSIM7080G - APP Network status: %d\n", status);
@@ -389,10 +386,10 @@ uint8_t SIM7080G::GetAppNetworkStatus(void) {
 void SIM7080G::GetAppNetworkInfo(SIM7080G_APPN* info) {
     if(info == NULL)
         return;
-    SendCommand("AT+CGNACT?\r", rxBufer);
+    SendCommand("AT+CGNACT?\r", rxBuffer);
     info->statusx = GetAppNetworkStatus();
     info->pdidx = 0x00;
-    char* startPtr = strchr(rxBufer, '\"') + 1;
+    char* startPtr = strchr(rxBuffer, '\"') + 1;
     size_t charCntr = (strchr(startPtr, '\"') - startPtr - 1);
 
     //Check against nullptr or wrong IP address length calculation
@@ -414,6 +411,93 @@ SIM7080G_APPN SIM7080G::GetAppNetworkInfo(void) {
 //  #   HTTP(S) applications
 //  #
 
+//
+bool SIM7080G::SetHTTPRequest(const SIM7080G_HTTPCONF httpConf, bool build) {
+    char buffer[SIM7080G_HTTP_REQ_BUFFER] = { '\0' };   //Temporary buffer for configuration
+
+    sprintf(buffer, "AT+SHCONF=\"URL\",\"%s\"\r", httpConf.url);
+    if (!SendCommand(buffer))
+        return false;
+    buffer[0] = 0;
+
+    sprintf(buffer, "AT+SHCONF=\"BODYLEN\",%u\r", httpConf.bodylen);
+    if (!SendCommand(buffer))
+        return false;
+    buffer[0] = 0;
+
+    sprintf(buffer, "AT+SHCONF=\"HEADERLEN\",%u\r", httpConf.headerlen);
+    if (!SendCommand(buffer))
+        return false;
+
+    if (build)
+        BuildHTTP();
+    
+    return true;
+}
+
+//
+SIM7080G_HTTP_RESULT SIM7080G::SendHTTPRequest(const SIM7080G_HTTPCONF httpConf, char* dst) {
+    char buffer[SIM7080G_HTTP_REQ_BUFFER] = { '\0' };
+
+    if (dst == NULL)
+        dst = rxBuffer;
+
+    sprintf(buffer, "AT+SHREQ=\"%s\",%u\r", httpConf.url, httpConf.method);
+    SendCommand(buffer, dst);
+
+    SIM7080G_HTTP_RESULT httpResult;
+
+    char* startPtr = strchr(dst, ',') + 1;
+    httpResult.resultCode = CharToNmbr(startPtr, 3);
+    httpResult.bytesReceived = CharToNmbr(strchr(startPtr, ',') + 1);
+
+    return httpResult;
+}
+
+//
+bool SIM7080G::BuildHTTP(void) {
+    return SendCommand("AT+SHCONN\r");
+}
+
+//
+uint8_t SIM7080G::GetHTTPStatus(void) {
+    SendCommand("AT+SHSTATE?\r", rxBuffer);
+    uint8_t httpStatus = *(strchr(rxBuffer, ' ') + 1) - '0';
+#ifdef SIM7080G_VERBOSE
+    uartDebugInterface.printf("\tSIM7080G - Get HTTP status: %u\n", httpStatus);
+#endif
+    return httpStatus;
+}
+
+//
+bool SIM7080G::ClearHTTPHeader(void) {
+    return SendCommand("AT+SHCHEAD\r");
+}
+
+//
+bool SIM7080G::AddHTTPHeaderContent(const SIM7080G_HTTP_HEADCONT headerContent) {
+    return AddHTTPContent(headerContent.type, headerContent.value, "AT+SHAHEAD");
+}
+
+//
+bool SIM7080G::SetHTTPBody(size_t length, uint16_t timeout) {
+    char buffer[SIM7080G_HTTP_REQ_BUFFER] = { '\0' };
+
+    sprintf(buffer, "AT+SHBOD=%u,%u\r", length, timeout);
+
+    return SendCommand(buffer);
+}
+
+//
+bool SIM7080G::ClearHTTPBody(void) {
+    return SendCommand("AT+SHCPARA\r");
+}
+
+//
+bool SIM7080G::AddHTTPBodyContent(const SIM7080G_HTTP_BODYCONT bodyContent) {
+    return AddHTTPContent(bodyContent.type, bodyContent.value, "AT+SHPARA");
+}
+
 //  #
 //  #   GNSS Application
 //  #
@@ -426,8 +510,8 @@ bool SIM7080G::PowerDownGNSS() { return GetGNSSPower() ? SendCommand("AT+CGNSPWR
 
 //
 uint8_t SIM7080G::GetGNSSPower() {
-    size_t bytesRecv = SendCommand("AT+CGNSPWR?\r", rxBufer);
-    uint8_t status = rxBufer[bytesRecv - 5] - '0';
+    size_t bytesRecv = SendCommand("AT+CGNSPWR?\r", rxBuffer);
+    uint8_t status = rxBuffer[bytesRecv - 5] - '0';
 #if defined SIM7080G_VERBOSE
     uartDebugInterface.printf("\tSIM7080G - GNSS Power status: %d\n", status);
 #endif
@@ -447,17 +531,17 @@ bool SIM7080G::HotStartGNSS() { return GetGNSSPower() ? true : SendCommand("AT+C
 void SIM7080G::GetGNSS(SIM7080G_GNSS* dst) {
 
     //Get GNSS info from device
-    size_t bytesrecv = SendCommand("AT+CGNSINF\r", rxBufer);
+    size_t bytesrecv = SendCommand("AT+CGNSINF\r", rxBuffer);
 
 #if defined SIM7080G_VERBOSE
-    uartDebugInterface.printf("\tSIM7080G - GNSS update requested: %s\n", rxBufer);
+    uartDebugInterface.printf("\tSIM7080G - GNSS update requested: %s\n", rxBuffer);
 #endif
     
     uint8_t comas = 0;      //Track comas in response text
     uint8_t infCntr = 0;    //For indexing SIM7080G_GNSS arrays
 
     for (uint8_t i = 0; i < bytesrecv; i++) {
-        if(rxBufer[i] == ','){
+        if(rxBuffer[i] == ','){
             comas++;
             infCntr = 0;
             continue;
@@ -467,31 +551,31 @@ void SIM7080G::GetGNSS(SIM7080G_GNSS* dst) {
         switch (comas)
         {
         case 0:     //GNSS Run status
-            dst->run = rxBufer[i] - '0';
+            dst->run = rxBuffer[i] - '0';
             break;
 
         case 2:     //UTC date & time
-            dst->datetime[infCntr++] = rxBufer[i];
+            dst->datetime[infCntr++] = rxBuffer[i];
             break;
 
         case 3:     //Latitude
-            dst->latitude[infCntr++] = rxBufer[i];
+            dst->latitude[infCntr++] = rxBuffer[i];
             break;
 
         case 4:     //Longitude
-            dst->longitude[infCntr++] = rxBufer[i];
+            dst->longitude[infCntr++] = rxBuffer[i];
             break;
         
         case 14:    //GPS Satellites in view
-            dst->gpsSat = (rxBufer[i] - '0') + (infCntr++ ? 1 : 0) * 10;
+            dst->gpsSat = (rxBuffer[i] - '0') + (infCntr++ ? 1 : 0) * 10;
             break;
 
         case 15:    //GNSS Satellites in view
-            dst->gnssSat = (rxBufer[i] - '0') + (infCntr++ ? 1 : 0) * 10;
+            dst->gnssSat = (rxBuffer[i] - '0') + (infCntr++ ? 1 : 0) * 10;
             break;
 
         case 16:    //GNSS Satellites in view
-            dst->glonassSat = (rxBufer[i] - '0') + (infCntr++ ? 1 : 0) * 10;
+            dst->glonassSat = (rxBuffer[i] - '0') + (infCntr++ ? 1 : 0) * 10;
             break;
 
         default:
@@ -513,7 +597,14 @@ SIM7080G_GNSS SIM7080G::GetGNSS(void) {
 //  #   Power
 //  #
 
-//uint16_t SIM7080G::GetVBat(void) const {}
+uint16_t SIM7080G::GetVBat(void) {
+    SendCommand("AT+CBC\r", rxBuffer);
+    uint16_t vBat = CharToNmbr(strchr(strchr(rxBuffer, ',') + 1, ',') + 1);
+#ifdef SIM7080G_VERBOSE
+    uartDebugInterface.printf("\tSIM7080G - Battery voltage: %u\n", vBat);
+#endif
+    return vBat;
+}
 
 //  #
 //  #   Private functions
@@ -533,5 +624,17 @@ void SIM7080G::EraseRXBuff(uint32_t value) {
     size_t rounds = this->uartMaxRecvSize / 4;
     //Erase buffer with 32 bit numbers for efficiency
     for(size_t i = 0; i < rounds; i+=4)
-        rxBufer[i] = value;
+        rxBuffer[i] = value;
+}
+
+//
+bool SIM7080G::AddHTTPContent(const char* type, const char* value, const char* command) {
+    if (type == NULL || value == NULL || command == NULL)
+        return false;
+    
+    char buffer[SIM7080G_HTTP_REQ_BUFFER] = { '\0' };
+
+    sprintf(buffer, "%s=\"%s\",\"%s\"\r", command, type, value);
+    
+    return SendCommand(buffer);
 }

@@ -1,36 +1,47 @@
 #ifndef SIM7080G_H
 #define SIM7080G_H
 
+#include <stdio.h>
 #include <Arduino.h>
 
 //#define SIM7080G_DEBUG_ALL      //Debug every function in detail
 //#define SIM7080G_DEBUG          //Normal debug messages from most of the functions
 #define SIM7080G_VERBOSE        //Send control messages to debug interface
 
-//Module power states
+#define SIM7080G_HTTP_REQ_BUFFER    512     //HTTP request configuration buffer size
+
+
+/**
+ *  @brief SIM7080G Power states
+*/
 enum SIM7080G_PWR {
     SIM_PWDN,       //Power down
     SIM_PWUP,       //Power up
     SIM_SLEEP       //Hardware sleep
 };
 
+/**
+ *  @brief SIM7080G APP network (mobile internet) info data structure
+*/
 struct SIM7080G_APPN {
     uint8_t pdidx = 0xFF;
     uint8_t statusx = 0xFF;
     char ipv4[16] = { '\0' };
 };
 
+/**
+ *  @brief SIM7080G GNSS Data structure
+*/
 struct SIM7080G_GNSS {
     uint8_t run = 0;            //Run status
     //uint8_t fix;            //Fix status
     char datetime[19] = {'\0'};      //UTC date & time
-    char latitude[11] = {'\0'};      //Latitude
-    char longitude[12] = {'\0'};     //Longitude
+    char latitude[11] = {'\0'};      //GNSS Latitude
+    char longitude[12] = {'\0'};     //GNSS Longitude
     //char mslAltitude[9];    //MSL Altitude
     //char sog[7];            //speed Over Ground
     //char cog[7];            //Course Over Ground
     //uint8_t fixMode;        //Fix mode
-    //Reserved 1 field
     //char hdop[5];           //HDOP
     //char pdop[5];           //PDOP
     //char vdop[5];           //VDOP
@@ -43,11 +54,41 @@ struct SIM7080G_GNSS {
 
 };
 
+enum SIM7080G_HTTP_METHOD {SIM7080G_HTTP_GET = 1, SIM7080G_HTTP_PUT = 2, SIM7080G_HTTP_POST = 3};
+
+/**
+ *  @brief SIM7080G HTTP(S) configuration
+*/
 struct SIM7080G_HTTPCONF {
-    const char* url;
-    uint16_t bodylen = 0;
-    uint16_t headerlen = 0;
-    uint8_t method;     //GET = 1, PUT = 2, POST = 3
+    char url[65] = { '\0' };                            //HTTP(S) URL (Max. 64 character supported by the SIM7080G module!)
+    uint16_t timeout = 60;                              //HTTP(S) request timeout in seconds 30-1800 (Default is 60)
+    uint16_t bodylen = 0;                               //HTTP(S) body length 0-4096
+    uint16_t headerlen = 0;                             //HTTP(S) header length 0-350
+    SIM7080G_HTTP_METHOD method = SIM7080G_HTTP_POST;   //GET = 1, PUT = 2, POST = 3
+};
+
+/**
+ *  @brief SIM7080G HTTP(S) header content parameter
+*/
+struct SIM7080G_HTTP_HEADCONT {
+    char* type;
+    char* value;
+};
+
+/**
+ *  @brief SIM7080G HTTP(S) body content parameter
+*/
+struct SIM7080G_HTTP_BODYCONT {
+    char* type;
+    char* value;
+};
+
+/**
+ * 
+*/
+struct SIM7080G_HTTP_RESULT {
+    uint16_t resultCode = 0;
+    size_t bytesReceived = 0;
 };
 
 class SIM7080G {
@@ -66,7 +107,7 @@ class SIM7080G {
 
     uint32_t uartResponseTimeout = 50;    //Time to wait before reading response from device
 
-    char rxBufer[uartMaxRecvSize];
+    char rxBuffer[uartMaxRecvSize];
     //char txBuffer[100];
 
     //Power control
@@ -367,7 +408,60 @@ public:
     //  #   HTTP(S) applications
     //  #
 
-    uint16_t SendRequestHTTP(SIM7080G_HTTPCONF* httpConf);
+    /**
+     * 
+    */
+    bool SetHTTPRequest(const SIM7080G_HTTPCONF httpConf, bool build = true);
+    //TODO Test
+
+    /**
+     * 
+    */
+    SIM7080G_HTTP_RESULT SendHTTPRequest(const SIM7080G_HTTPCONF httpConf, char* dst = NULL);
+    //TODO Test
+
+    /**
+     * 
+    */
+    bool BuildHTTP(void);
+    //TODO Test
+
+    /**
+     * 
+    */
+    uint8_t GetHTTPStatus(void);
+    //TODO Test
+
+    /**
+     * 
+    */
+    bool ClearHTTPHeader(void);
+    //TODO Test
+
+    /**
+     * 
+    */
+    bool AddHTTPHeaderContent(const SIM7080G_HTTP_HEADCONT headerContent);
+    //TODO Test
+
+    /**
+     * 
+    */
+    bool SetHTTPBody(size_t length = 0, uint16_t timeout = 10);
+    //TODO Test
+
+    /**
+     * 
+    */
+    bool ClearHTTPBody(void);
+    //TODO Test
+
+    /**
+     * 
+    */
+    bool AddHTTPBodyContent(const SIM7080G_HTTP_BODYCONT bodyContent);
+    //TODO Test
+
 
     //  #
     //  #   GNSS 
@@ -436,18 +530,8 @@ public:
      * 
      *  @return Battery voltage in mV.
     */
-    uint16_t GetVBat(void) const;
-    //TODO
-
-    /**
-     *  @brief Get battery charge percentage.
-     * 
-     *  @returns 0-100 battery charge percentage.
-    */
-    uint8_t GetPBat(void) const;
-    //TODO
-
-    
+    uint16_t GetVBat(void);
+    //TODO Test
 
 private:
 
@@ -463,6 +547,11 @@ private:
      *  @param value            Erase buffer with this value
     */
     void EraseRXBuff(uint32_t value = 0x04040404);
+
+    /**
+     * 
+    */
+    bool AddHTTPContent(const char* type, const char* value, const char* command);
 
 };
 
