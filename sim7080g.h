@@ -91,6 +91,35 @@ struct SIM7080G_HTTP_RESULT {
     size_t bytesReceived = 0;
 };
 
+/**
+ *  @brief SIM7080G FTP transaction result codes
+*/
+enum SIM7080G_FTP_RESULT {
+    SIM_FTP_SUCCESS = 0,        //Successful
+    SIM_FTP_NET_ERR = 61,       //Network error
+    SIM_FTP_DNS_ERR = 62,       //DNS error
+    SIM_FTP_CON_ERR = 63,       //Connect error
+    SIM_FTP_TIMEOUT = 64,       //Timeout
+    SIM_FTP_SRV_ERR = 65,       //Server error
+    SIM_FTP_OPNTALL = 66,       //Operation not allowed
+    SIM_FTP_REPLERR = 70,       //Replay error
+    SIM_FTP_USR_ERR = 71,       //Username error
+    SIM_FTP_PWD_ERR = 72,       //Password error
+    SIM_FTP_TYPEERR = 73,       //Type error
+    SIM_FTP_RESTERR = 74,       //Rest error
+    SIM_FTP_PSS_ERR = 75,       //Passive error
+    SIM_FTP_ACT_ERR = 76,       //Active error
+    SIM_FTP_OPR_ERR = 77,       //Operate error
+    SIM_FTP_UPL_ERR = 78,       //Upload error
+    SIM_FTP_DWL_ERR = 79,       //Download error
+    SIM_FTP_MANQUIT = 80,       //Manual quit
+    SIM_FTP_SSLCERR = 90,       //SSL connect error
+    SIM_FTP_SSLAERR = 91,       //SSL alert error
+    SIM_FTP_AUT_ERR = 92,       //AUTH error
+    SIM_FTP_PBS_ERR = 93,       //PBSIZE error
+    SIM_FTP_PRT_ERR = 94        //PORT error
+};
+
 class SIM7080G {
 
     //Serial communication
@@ -111,7 +140,7 @@ class SIM7080G {
     //char txBuffer[100];
 
     //Power control
-    int dtrKey = -1;                        //Send module to light sleep (active high) DEPRECATED IN V2!! (no dtr pin in PCB V2)
+    int dtrKey = -1;                        //Send module to light sleep (active high)
     uint8_t pwrKey = 0;                    //Power on/off the module
 
     //
@@ -278,13 +307,13 @@ public:
     //*OK
 
     /**
-     * 
+     *  @brief Set AT command response format
     */
     void SetTAResponseFormat(bool textResponse = false);
     //*OK
 
     //  #
-    //  #   Cellular communication
+    //  #   Cellular network parameters
     //  #
 
     /**
@@ -293,7 +322,7 @@ public:
      *  @return Registration status (See SIM7080G AT Command Manual page 63)
     */
     uint8_t GetNetworkReg(void);
-    //TODO
+    //*OK
 
     /**
      *  @brief Get cellular signal quality report
@@ -308,14 +337,14 @@ public:
      * 
      *  @param debugInterface       
     */
-    void GetCellOperators(HardwareSerial& debugInterface);
-    //TODO
+    //void GetCellOperators(HardwareSerial& debugInterface);
+    //! TODO
 
     /**
      *  @brief List available operators to software serial debug interface
     */
     //void GetCellOperators(SoftwareSerial& debugInterface) const;
-    //TODO
+    //! TODO
 
     /**
      *  @brief List available operators to software serial debug interface
@@ -324,36 +353,36 @@ public:
      * 
      *  @return Number of bytes written to dst
     */
-    size_t GetCellOperators(char* dst);
-    //TODO
+    //size_t GetCellOperators(char* dst);
+    //! TODO
 
     /**
      *  @brief Select cellular operator to use
     */
-    void SetCellOperator(const char* opName);
-    //TODO
+    //void SetCellOperator(const char* opName);
+    //! TODO
 
     /**
      *  @brief Get cellular (phone) functionality
      * 
      *  @return Functionality code (See SIM7080G AT Command Manual page 70)
     */
-    uint8_t GetCellFunction(void);
-    //TODO
+    //uint8_t GetCellFunction(void);
+    //! TODO
 
     /**
      *  @brief Set cellular (phone) functionality
     */
-    void SetCellFunction(uint8_t functionCode);
-    //TODO
+    //void SetCellFunction(uint8_t functionCode);
+    //! TODO
 
     /**
      *  @brief Get chip time
      * 
      *  @param dst          Char array to store time and date (min 21 characters long, including \0)
     */
-    void GetTime(char* dst);
-    //TODO
+    //void GetTime(char* dst);
+    //! TODO
 
     /**
      *  @brief Enter SIM PIN code
@@ -409,72 +438,272 @@ public:
     //  #
 
     /**
+     *  @brief Set HTTP request parameters
      * 
+     *  @param httpConf HTTP configuration
+     *  @param build Auto build HTTP request
+     * 
+     *  @returns Whether the operation was successful
     */
     bool SetHTTPRequest(const SIM7080G_HTTPCONF httpConf, bool build = true);
-    //TODO Test
+    //*OK
 
     /**
+     *  @brief Send prepared HTTP request
      * 
+     *  @param httpConf HTTP configuration
+     *  @param dst Buffer to store response data
+     * 
+     *  @returns HTTP request result
     */
     SIM7080G_HTTP_RESULT SendHTTPRequest(const SIM7080G_HTTPCONF httpConf, char* dst = NULL);
-    //TODO Test
+    //*OK
 
     /**
-     * 
+     *  @brief Build HTTP request
     */
     bool BuildHTTP(void);
-    //TODO Test
+    //*OK
 
     /**
-     * 
+     *  @brief Get HTTP status
     */
     uint8_t GetHTTPStatus(void);
-    //TODO Test
+    //*OK
 
     /**
-     * 
+     *  @brief CLear HTTP header
     */
     bool ClearHTTPHeader(void);
-    //TODO Test
+    //*OK
 
     /**
+     *  @brief Add HTTP header content
      * 
+     *  @param headerContent HTTP header content
     */
     bool AddHTTPHeaderContent(const SIM7080G_HTTP_HEADCONT headerContent);
-    //TODO Test
+    //*OK
 
     /**
+     *  @brief Set HTTP body
      * 
+     *  @param lenghth HTTP body length
     */
-    bool SetHTTPBody(size_t length = 0, uint16_t timeout = 10);
-    //TODO Test
+    bool SetHTTPBody(size_t length = 0);
+    //*OK
 
     /**
-     * 
+     *  @brief Clear HTTP body
     */
     bool ClearHTTPBody(void);
-    //TODO Test
+    //*OK
 
     /**
+     *  @brief Add HTTP body content
      * 
+     *  @param bodyContent HTTP body content
     */
     bool AddHTTPBodyContent(const SIM7080G_HTTP_BODYCONT bodyContent);
-    //TODO Test
+    //*OK
 
 
     //  #
-    //  #   GNSS 
+    //  #   File Transfer Protocol (FTP)
+    //  #
+
+    /**
+     *  @brief Set FTP control port
+     * 
+     *  @param port FTP control port (Default: 21)
+    */
+    bool SetFTPPort(uint16_t port);
+    //TODO
+
+    /**
+     *  @brief Set FTP mode
+     * 
+     *  @param mode false - active | true - passive
+     * 
+     *  @returns Whether the operation was successful
+    */
+    bool SetFTPMode(bool mode);
+    //TODO
+
+    /**
+     *  @brief Set FTP data type
+     * 
+     *  @param type false - ASCII | true - Binary
+     * 
+     *  @returns Whether the operation was successful
+    */
+    bool SetFTPDataType(bool type);
+    //TODO
+
+    /**
+     *  @brief Set FTP PUT type
+     * 
+     *  @param type PUT command type (Refer to SIM7080G AT Command manual)
+     * 
+     *  @returns Whether the operation was successful
+    */
+    bool SetFTPPutType(const char* type);
+    //TODO
+
+    /**
+     *  @brief Set FTP Server IP address
+     * 
+     *  @param ip Server IP address as string or domain name (Only if DNS available)
+     * 
+     *  @returns Whether the operation was successful
+    */
+    bool SetFTPServer(const char* ip);
+    //TODO
+
+    /**
+     *  @brief Set FTP username
+     * 
+     *  @param username 
+     * 
+     *  @returns Whether the operation was successful
+    */
+    bool SetFTPUsername(const char* username);
+    //TODO
+
+    /**
+     *  @brief Set FTP password
+     * 
+     *  @param password
+     * 
+     *  @returns Whether the operation was successful
+    */
+    bool SetFTPPassword(const char*password);
+    //TODO
+
+    /**
+     *  @brief Set FTP filename to be downloaded
+     * 
+     *  @param filename File's name to download
+     * 
+     *  @returns Whether the operation was successful
+    */
+    bool SetFTPDownFN(const char* filename);
+    //TODO
+
+    /**
+     *  @brief Set FTP file's path on the server to download
+     * 
+     *  @param filePath File's path on the server
+     * 
+     *  @returns Whether the operation was successful
+    */
+    bool SetFTPDownFP(const char* filePath);
+    //TODO
+
+    /**
+     *  @brief Set FTP filename to be uploaded
+     * 
+     *  @param filename File's name to upload
+     * 
+     *  @returns Whether the operation was successful
+    */
+    bool SetFTPUpFN(const char* filename);
+    //TODO
+
+    /**
+     *  @brief Set FTP file's path on the server to upload
+     * 
+     *  @param filePath File's path on the server
+     * 
+     *  @returns Whether the operation was successful
+    */
+    bool SetFTPUpFP(const char* filePath);
+    //TODO
+
+    /**
+     *  @brief Upload specified file to FTP server
+     * 
+     *  @param src Buffer to send data from
+     *  @param length src buffer's length
+     * 
+     *  @returns FTP session result
+    */
+    SIM7080G_FTP_RESULT FTPUpload(uint8_t* src, size_t length);
+    //TODO
+
+    /**
+     *  @brief Download specified file from FTP server
+     * 
+     *  @param dst Buffer to store received bytes
+     *  @param bytesReceived Ptr to variable to return the number of bytes received
+     * 
+     *  @returns FTP session result
+    */
+    SIM7080G_FTP_RESULT FTPDownload(uint8_t* dst, size_t* bytesReceived);
+    //TODO
+
+    /**
+     *  @brief Delete previouly specified file from FTP server
+    */
+    SIM7080G_FTP_RESULT DeleteFTPFile(void);
+    //TODO
+
+    /**
+     *  @brief Get a previously specified file's size
+     * 
+     *  @returns Specified file's size in bytes
+    */
+    size_t GetFTPFileSize(void);
+    //TODO
+
+    /**
+     *  @Get FTP session state
+     * 
+     *  @returns 0 - Idle | 1 - In the FTP session, including FTPGET, FTPPUT, FTPDELE and FTPSIZE operation.
+    */
+    uint8_t GetFTPState(void);
+    //TODO
+
+    /**
+     *  @brief Make previously specified directory on FTP server
+     * 
+     *  @returns Whether the operation was successful
+    */
+    bool MkFTPDir(void);
+    //TODO
+
+    /**
+     *  @brief Remove previously specified directory on FTP server
+     * 
+     *  @returns Whether the operation was successful
+    */
+    bool RmFTPDir(void);
+    //TODO
+
+    /**
+     *  @brief Close current FTP session
+     * 
+     *  @returns Whether the operation was successful
+    */
+    bool CloseFTPSession(void);
+
+
+    //  #
+    //  #   GLobal Navigation Satellite System
     //  #
 
     /**
      *  @brief Power up GNSS
+     * 
+     *  @returns Whether the operation was successful
     */
     bool PowerUpGNSS(void);
     //*OK
 
     /**
      *  @brief Power down GNSS
+     * 
+     *  @returns Whether the operation was successful
     */
     bool PowerDownGNSS(void);
     //*OK
@@ -489,18 +718,24 @@ public:
 
     /**
      *  @brief Cold start GNSS
+     * 
+     *  @returns Whether the operation was successful
     */
     bool ColdStartGNSS(void);
     //*OK
 
     /**
      *  @brief Warm start GNSS
+     * 
+     *  @returns Whether the operation was successful
     */
     bool WarmStartGNSS(void);
     //*OK
 
     /**
      *  @brief Hot start GNSS
+     * 
+     *  @returns Whether the operation was successful
     */
     bool HotStartGNSS(void);
     //*OK
