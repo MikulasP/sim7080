@@ -4,11 +4,20 @@
 #include <stdio.h>
 #include <Arduino.h>
 
+//DEPRECATED!!
 //#define SIM7080G_DEBUG_ALL      //Debug every function in detail
 //#define SIM7080G_DEBUG          //Normal debug messages from most of the functions
-#define SIM7080G_VERBOSE        //Send control messages to debug interface
+//#define SIM7080G_VERBOSE        //Send control messages to debug interface
 
-#define SIM7080G_HTTP_REQ_BUFFER    512     //HTTP request configuration buffer size
+/*
+ *  SIM module debug levels
+ *      - 0: No debug messages
+ *      - 1: Only control messages to debug interface
+ *      - 2: Debug most of the functions
+ *      - 3: In depth debug messages about (almost) everything
+*/
+#define SIM7080G_DEBUG_LEVEL                1
+#define SIM7080G_HTTP_REQ_BUFFER            512     //HTTP request configuration buffer size
 
 
 /**
@@ -84,7 +93,7 @@ struct SIM7080G_HTTP_BODYCONT {
 };
 
 /**
- * 
+ *  @brief SIM7080G HTTP(S) request results
 */
 struct SIM7080G_HTTP_RESULT {
     uint16_t resultCode = 0;
@@ -96,6 +105,9 @@ struct SIM7080G_HTTP_RESULT {
 */
 enum SIM7080G_FTP_RESULT {
     SIM_FTP_SUCCESS = 0,        //Successful
+    SIM_FTP_PAR_ERR = 1,        //Given parameter was invalid
+    SIM_FTP_RESP_TO = 2,        //Server did not respond in the specified time
+    SIM_FTP_OTH_ERR = 3,        //Undefined error
     SIM_FTP_NET_ERR = 61,       //Network error
     SIM_FTP_DNS_ERR = 62,       //DNS error
     SIM_FTP_CON_ERR = 63,       //Connect error
@@ -117,7 +129,23 @@ enum SIM7080G_FTP_RESULT {
     SIM_FTP_SSLAERR = 91,       //SSL alert error
     SIM_FTP_AUT_ERR = 92,       //AUTH error
     SIM_FTP_PBS_ERR = 93,       //PBSIZE error
-    SIM_FTP_PRT_ERR = 94        //PORT error
+    SIM_FTP_PRT_ERR = 94       //PORT error
+};
+
+/**
+ *  @brief SIM7080G FTP data type
+*/
+enum SIM7080G_FTP_DTYPE {
+    SIM_FTP_ASCII  = 0,
+    SIM_FTP_BINARY = 1
+};
+
+/**
+ *  @brief SIM7080G FTP operating mode
+*/
+enum SIM7080G_FTP_MODE {
+    SIM_FTP_ACTIVE  = 0,
+    SIM_FTP_PASSIVE = 1
 };
 
 class SIM7080G {
@@ -147,7 +175,7 @@ class SIM7080G {
     bool uartOpen = false;                      //UART interface state
     SIM7080G_PWR pwrState = SIM_PWDN;           //Power state
 
-#if defined SIM7080G_DEBUG_ALL || defined SIM7080G_DEBUG || defined SIM7080G_VERBOSE
+#if SIM7080G_DEBUG_LEVEL >= 1
 
     //UART debug interface
     //HardwareSerial& uartDebugInterface = Serial;
@@ -262,20 +290,22 @@ public:
      * 
      *  @param command      Char array containing the command with null terminator
      *  @param response     Char array to store the response (if nullptr response will be discarded)
+     *  @param timeout      Maximum amount of time to wait for response (if response not NULL)
      * 
      *  @return Number of bytes received as response (including null terminator)
     */
-    size_t SendCommand(const char* command, char* response, uint32_t recvTimeout = 0);
+    size_t SendCommand(const char* command, char* response, uint32_t timeout = 0);
     //*OK
 
     /**
      *  @brief Send AT command and wait for ERROR or OK
      * 
      *  @param command      Char array containing the command with null terminator
+     *  @param timeout      Maximum amount of time to wait for response
      * 
-     *  @return 
+     *  @return true: command successfull | false: command error
     */
-    bool SendCommand(const char* command, uint32_t recvTimeout = 0);
+    bool SendCommand(const char* command, uint32_t timeout = 0);
     //*OK
 
     /**
@@ -292,10 +322,11 @@ public:
      * 
      *  @param dst          Array to store the received data
      *  @param len          Number of bytes to receive (If 0 all available data will be read)
+     *  @param timeout      Maximum amount of time to wait for response
      *  
      *  @return Number of bytes actually received
     */
-    size_t Receive(uint8_t* dst, size_t len = 0);
+    size_t Receive(uint8_t* dst, size_t len = 0, uint32_t timeout = 0);
     //*OK
 
     /**
@@ -310,6 +341,14 @@ public:
      *  @brief Set AT command response format
     */
     void SetTAResponseFormat(bool textResponse = false);
+    //*OK
+
+    /**
+     *  @brief Set command echo mode
+     * 
+     *  @param echo Enable or disable command echo
+    */
+    bool SetEcho(bool echo);
     //*OK
 
     //  #
@@ -434,6 +473,24 @@ public:
 
 
     //  #
+    //  #   IP applications
+    //  #
+
+    /**
+     *  @brief Ping an IPv4 address
+     * 
+     *  @param address IP address to ping
+     *  @param pingCount Ping count (1 - 500)
+     *  @param packetSize Ping packet's size in bytes (1-1400)
+     *  @param timeout Maximum time to wai for reply in ms (1 - 60000)
+     * 
+     *  @returns Successful ping count
+    */
+    int Ping4(const char* address, uint16_t pingCount = 4, uint16_t packetSize = 64, uint32_t timeout = 2500);
+    //TODO
+
+
+    //  #
     //  #   HTTP(S) applications
     //  #
 
@@ -489,8 +546,9 @@ public:
      *  @brief Set HTTP body
      * 
      *  @param lenghth HTTP body length
+     *  @param timeout Timeout for automatically sending edited data
     */
-    bool SetHTTPBody(size_t length = 0);
+    bool SetHTTPBody(size_t length, uint16_t timeout);
     //*OK
 
     /**
@@ -518,27 +576,37 @@ public:
      *  @param port FTP control port (Default: 21)
     */
     bool SetFTPPort(uint16_t port);
-    //TODO
+    //*OK
 
     /**
      *  @brief Set FTP mode
      * 
-     *  @param mode false - active | true - passive
+     *  @param mode FTP mode
      * 
      *  @returns Whether the operation was successful
     */
-    bool SetFTPMode(bool mode);
-    //TODO
+    bool SetFTPMode(SIM7080G_FTP_MODE mode);
+    //*OK
 
     /**
      *  @brief Set FTP data type
      * 
-     *  @param type false - ASCII | true - Binary
+     *  @param type FTP data type
      * 
      *  @returns Whether the operation was successful
     */
-    bool SetFTPDataType(bool type);
-    //TODO
+    bool SetFTPDataType(SIM7080G_FTP_DTYPE type);
+    //*OK
+
+    /**
+     *  @brief Set FTP PDP identifier (Note: APP network defaults to ID 0 for now)
+     * 
+     *  @param pdpidx PDP identifier
+     * 
+     *  @returns Whether the operation was successful
+    */
+    bool SetFTPCID(uint8_t pdpidx = 0);
+    //*OK
 
     /**
      *  @brief Set FTP PUT type
@@ -547,8 +615,8 @@ public:
      * 
      *  @returns Whether the operation was successful
     */
-    bool SetFTPPutType(const char* type);
-    //TODO
+    //bool SetFTPPutType(const char* type);
+    //! TODO
 
     /**
      *  @brief Set FTP Server IP address
@@ -558,7 +626,7 @@ public:
      *  @returns Whether the operation was successful
     */
     bool SetFTPServer(const char* ip);
-    //TODO
+    //*OK
 
     /**
      *  @brief Set FTP username
@@ -568,7 +636,7 @@ public:
      *  @returns Whether the operation was successful
     */
     bool SetFTPUsername(const char* username);
-    //TODO
+    //*OK
 
     /**
      *  @brief Set FTP password
@@ -578,7 +646,7 @@ public:
      *  @returns Whether the operation was successful
     */
     bool SetFTPPassword(const char*password);
-    //TODO
+    //*OK
 
     /**
      *  @brief Set FTP filename to be downloaded
@@ -588,7 +656,7 @@ public:
      *  @returns Whether the operation was successful
     */
     bool SetFTPDownFN(const char* filename);
-    //TODO
+    //*OK
 
     /**
      *  @brief Set FTP file's path on the server to download
@@ -598,7 +666,7 @@ public:
      *  @returns Whether the operation was successful
     */
     bool SetFTPDownFP(const char* filePath);
-    //TODO
+    //*OK
 
     /**
      *  @brief Set FTP filename to be uploaded
@@ -608,7 +676,7 @@ public:
      *  @returns Whether the operation was successful
     */
     bool SetFTPUpFN(const char* filename);
-    //TODO
+    //*OK
 
     /**
      *  @brief Set FTP file's path on the server to upload
@@ -618,7 +686,7 @@ public:
      *  @returns Whether the operation was successful
     */
     bool SetFTPUpFP(const char* filePath);
-    //TODO
+    //*OK
 
     /**
      *  @brief Upload specified file to FTP server
@@ -629,7 +697,7 @@ public:
      *  @returns FTP session result
     */
     SIM7080G_FTP_RESULT FTPUpload(uint8_t* src, size_t length);
-    //TODO
+    //TODO improve
 
     /**
      *  @brief Download specified file from FTP server
@@ -662,31 +730,29 @@ public:
      *  @returns 0 - Idle | 1 - In the FTP session, including FTPGET, FTPPUT, FTPDELE and FTPSIZE operation.
     */
     uint8_t GetFTPState(void);
-    //TODO
+    //*OK
 
     /**
      *  @brief Make previously specified directory on FTP server
      * 
      *  @returns Whether the operation was successful
     */
-    bool MkFTPDir(void);
-    //TODO
+    //bool MkFTPDir(void);
+    //! TODO
 
     /**
      *  @brief Remove previously specified directory on FTP server
      * 
      *  @returns Whether the operation was successful
     */
-    bool RmFTPDir(void);
-    //TODO
+    //bool RmFTPDir(void);
+    //! TODO
 
     /**
      *  @brief Close current FTP session
-     * 
-     *  @returns Whether the operation was successful
     */
-    bool CloseFTPSession(void);
-
+    void CloseFTPSession(void);
+    //*OK
 
     //  #
     //  #   GLobal Navigation Satellite System
@@ -756,6 +822,12 @@ public:
     SIM7080G_GNSS GetGNSS(void);
     //*OK
 
+    /**
+     *  @brief Check if GNSS data is available
+    */
+    bool GetGNSSLock(void);
+    //TODO
+
     //  #
     //  #   Power Info
     //  #
@@ -791,3 +863,11 @@ private:
 };
 
 #endif  //SIM7080G_H
+
+
+//
+//  Conctant values
+//
+#define SIM7080_INVALID_RETURN_VALUE        255     // If a function got no response from the device or the response cannot be processed, return this value indicating the error
+#define SIM7080_INVALID_PARAMETER           -1      //The function received invalid parameter(s)
+#define SIM7080_SIGNAL_QUALITY_UNKNOWN      99      //Value 99 indicates thaat the signal quality is unknown (SIM7080 AT Command manual)

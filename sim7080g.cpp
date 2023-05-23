@@ -7,30 +7,40 @@
  * 
  *  @param number       Start of char array containing the numbers
  *  @param len          Length of the string to process (if 0 whole string will be processed)
+ * 
+ *  @returns Given number if input is valid or 0 if input invalid
 */
-int CharToNmbr(char* number, size_t len = 0) {
-    if(!number)
+long long int CharToNmbr(char* number, size_t len = 0) {
+    if(!number)     //return if nunmber is nullptr
         return 0;
     
-    if (!len)
-        len = strlen(number);
+    /*
+        If no length was given start from the beginning
+        and count until a non number character to define length.
 
-    int val = 0;
+        1st character can be '-' to indicate negative value.
+    */
+    if (number[0] == '-')
+        len++;
+    if (!len || number[0] == '-') 
+        while(*(number + len) != '\0' && (*(number + len) >= '0' && *(number + len) <= '9')) 
+            len++;
+    
+    //Return 0 if the 1st char is - but no number follows it
+    if(len == 1 && number[0] == '-')
+        return 0;
 
+    long long int val = 0;
     size_t mult = 1;
 
     //
-    for(int i = len - 1; i >= 0; i--) {
-        if(number[i] == '-') {
-            val *= -1;
-            continue;
-        }
-        
-        if (number[i] - '0' >= 0 && number[i] - '0' <= 9) {
-            val += (number[i] - '0') * mult;
-            mult *= 10;
-        }
+    for(int i = len - 1; i >= (number[0] == '-' ? 1 : 0); i--) {
+        val += (number[i] - '0') * mult;
+        mult *= 10;
     }
+
+    if (number[0] == '-')
+        val *= -1;
 
     return val;
 }
@@ -58,6 +68,7 @@ SIM7080G::SIM7080G(uint8_t rx, uint8_t tx, uint8_t pwr, int dtr, bool openUART) 
 //  #   IO / Power control
 //  #
 
+//
 void SIM7080G::SetDTR(int dtr) {
     //Setup DTR key
     if (dtr >= 0) {
@@ -68,14 +79,14 @@ void SIM7080G::SetDTR(int dtr) {
 
 //
 void SIM7080G::PowerUp() {
-#if defined SIM7080G_DEBUG_ALL || defined SIM7080G_DEBUG
+#if v
     uartDebugInterface.printf("DEBUG START: PowerUp()\n");
 #endif
     //Test if device is already powered up
     if (TestUART()){
-#if defined SIM7080G_DEBUG_ALL || defined SIM7080G_DEBUG
+#if SIM7080G_DEBUG_LEVEL >= 2
         uartDebugInterface.printf("\tDevice already powered up! Nothing to do here...\nDEBUG END: PowerUp()\n");
-#elif defined SIM7080G_VERBOSE
+#elif SIM7080G_DEBUG_LEVEL == 1
         uartDebugInterface.printf("\tSIM7080G - Device already powered up! Nothing to do here...\n");
 #endif
         pwrState = SIM_PWUP;
@@ -84,9 +95,9 @@ void SIM7080G::PowerUp() {
 
     //Power cycle device
     if(pwrState == SIM_PWDN) {
-#if defined SIM7080G_DEBUG_ALL || defined SIM7080G_DEBUG
+#if SIM7080G_DEBUG_LEVEL >= 2
         uartDebugInterface.printf("\tPowering up device...\nDEBUG END: PowerUp()\n");
-#elif defined SIM7080G_VERBOSE
+#elif SIM7080G_DEBUG_LEVEL == 1
         uartDebugInterface.printf("\tSIM7080G - Powering up device...\n");
 #endif
         pwrState = SIM_PWUP;
@@ -106,12 +117,12 @@ void SIM7080G::PowerDown() {
 
 //
 void SIM7080G::Reboot() {
-    SendCommand("AT+CREBOOT\r\n");
+    SendCommand("AT+CREBOOT\r");
 }
 
 //
 void SIM7080G::EnterSleep() {
-    if(pwrState == SIM_PWUP) {
+    if(pwrState == SIM_PWUP && dtrKey >= 0) {
         digitalWrite(dtrKey, HIGH);
         pwrState = SIM_SLEEP;
     }
@@ -119,7 +130,7 @@ void SIM7080G::EnterSleep() {
 
 //
 void SIM7080G::LeaveSleep() {
-    if (pwrState == SIM_SLEEP) {
+    if (pwrState == SIM_SLEEP && dtrKey >= 0) {
         digitalWrite(dtrKey, LOW);
         pwrState = SIM_PWUP;
     }
@@ -161,23 +172,30 @@ size_t SIM7080G::AvailableUART() {
 }
 
 //
-size_t SIM7080G::SendCommand(const char* command, char* response, uint32_t recvTimeout) {
+size_t SIM7080G::SendCommand(const char* command, char* response, uint32_t timeout) {
+    if(!command)
+        return 0;   //Retur 0 if command is nullptr
+    
     //Send command
     uartInterface.print(command);
-    //uartInterface.write("\r");
-
-    //Wait for response
-    delay(recvTimeout ? recvTimeout : uartRecvtimeout);
 
     //Read data from device
     size_t bytesRecv = 0;
+
     if(response) {
+        //Wait for response
+        if (timeout > 0)
+            for(size_t i = 0; i < timeout && !uartInterface.available(); i++)
+                delay(1);
+        else
+            delay(uartRecvtimeout);
+    
         while(uartInterface.available() && bytesRecv < uartMaxRecvSize)
             response[bytesRecv++] = (char)uartInterface.read();
         response[bytesRecv] = 0;
     }
 
-#if defined SIM7080G_DEBUG_ALL
+#if SIM7080G_DEBUG_LEVEL >= 3
     //Command debug
     uartDebugInterface.printf("DEBUG START: SendCommand(char*, char*)\n");
 
@@ -201,12 +219,12 @@ size_t SIM7080G::SendCommand(const char* command, char* response, uint32_t recvT
 }
 
 //
-bool SIM7080G::SendCommand(const char* command, uint32_t recvTimeout) {
-    size_t bytesRecv = SendCommand(command, rxBuffer, recvTimeout);
+bool SIM7080G::SendCommand(const char* command, uint32_t timeout) {
+    size_t bytesRecv = SendCommand(command, rxBuffer, timeout);
 
     bool result = bytesRecv >= 2 && rxBuffer[bytesRecv - 2] == '0';
 
-#if defined SIM7080G_DEBUG_ALL || defined SIM7080G_DEBUG
+#if SIM7080G_DEBUG_LEVEL >= 3
     //Command debug
     uartDebugInterface.printf("DEBUG START: SendCommand(char*)\n");
     if(bytesRecv >= 2)
@@ -214,7 +232,7 @@ bool SIM7080G::SendCommand(const char* command, uint32_t recvTimeout) {
     else
         uartDebugInterface.printf("\tNot enough bytes received! Bytes received: %d\n", bytesRecv);
     uartDebugInterface.printf("DEBUG END: SendCommand(char*)\n");
-#elif defined SIM7080G_VERBOSE
+#elif SIM7080G_DEBUG_LEVEL >= 2
     uartDebugInterface.printf("\tSIM7080G - Command: %s | Result: %s\n", command, (result ? "SUCCESSFUL" : "FAILED"));
 #endif
 
@@ -227,11 +245,15 @@ void SIM7080G::Send(uint8_t* src, size_t len) {
 }
 
 //
-size_t SIM7080G::Receive(uint8_t* dst, size_t len) {
+size_t SIM7080G::Receive(uint8_t* dst, size_t len, uint32_t timeout) {
     size_t bytesRecv = 0;
 
+    if (timeout > 0)
+        for(size_t i = 0; i < timeout && !uartInterface.available(); i++)
+            delay(1);
+
     for (;uartInterface.available() && (len ? bytesRecv < len : true);) 
-        dst[bytesRecv++] = (char)uartInterface.read();
+        dst[bytesRecv++] = (uint8_t)uartInterface.read();
     
     return bytesRecv;
 }
@@ -247,8 +269,14 @@ bool SIM7080G::TestUART() {
     return SendCommand("AT+CGMI=?\r");
 }
 
+//
 void SIM7080G::SetTAResponseFormat(bool textResponse) {
     SendCommand(textResponse ? (char*)"ATV1\r" : (char*)"ATV0\r");
+}
+
+//
+bool SIM7080G::SetEcho(bool echo) {
+    return SendCommand(echo ? "ATE1\r" : "ATE0\r");
 }
 
 //  #
@@ -258,17 +286,23 @@ void SIM7080G::SetTAResponseFormat(bool textResponse) {
 //
 uint8_t SIM7080G::GetNetworkReg(void) {
     size_t bytesRecv = SendCommand("AT+CREG?\r", rxBuffer);
-    uint8_t status = *(strrchr(rxBuffer, ',') + 1) - '0';
-#if defined SIM7080G_VERBOSE
+    char* startPtr = strchr(rxBuffer, ',');
+    if (!startPtr)
+        return 255;
+    uint8_t status = *(startPtr + 1) - '0';
+#if SIM7080G_DEBUG_LEVEL >= 1
     uartDebugInterface.printf("\tSIM7080G - Network Registration status: %d\n", status);
 #endif
     return status;
 }
 
-
+//
 uint8_t SIM7080G::GetSignalQuality() {
     
     size_t bytesRecv = SendCommand("AT+CSQ\r", rxBuffer);
+
+    if(bytesRecv == 0)
+        return 255;
 
     char* startPtr = rxBuffer;
     while ((*startPtr) != ':' && (*startPtr) != '\0')
@@ -279,7 +313,7 @@ uint8_t SIM7080G::GetSignalQuality() {
     for (; startPtr[offset] != ',' && startPtr[offset] != '\0'; offset++);
 
     //Check against mem overflow
-    return bytesRecv <= uartMaxRecvSize && startPtr + 2 <= rxBuffer + uartMaxRecvSize ? CharToNmbr(startPtr, offset) : 99;
+    return bytesRecv <= uartMaxRecvSize && startPtr + 2 <= rxBuffer + uartMaxRecvSize ? CharToNmbr(startPtr, offset) : SIM7080_SIGNAL_QUALITY_UNKNOWN;
 }
 
 
@@ -302,15 +336,15 @@ uint8_t SIM7080G::GetSignalQuality() {
 
 //
 bool SIM7080G::EnterPIN(const char* pin, bool force) {
-#if defined SIM7080G_DEBUG || defined SIM7080G_DEBUG_ALL
+#if SIM7080G_DEBUG_LEVEL >= 2
     uartDebugInterface.printf("DEBUG START: EnterPin(%s)\n", pin);
 #endif
     
     //SIM PIN is already entered
     if (GetPINStatus()) {
-#if defined SIM7080G_DEBUG || defined SIM7080G_DEBUG_ALL
+#if SIM7080G_DEBUG_LEVEL >= 2
         uartDebugInterface.printf("\tSIM PIN READY\nDEBUG END: EnterPin(%s)\n", pin);
-#elif defined SIM7080G_VERBOSE
+#elif defined SIM7080G_DEBUG_LEVEL == 1
         uartDebugInterface.printf("\tSIM7080G - SIM PIN is already entered!\n");
 #endif
         return true;
@@ -318,33 +352,32 @@ bool SIM7080G::EnterPIN(const char* pin, bool force) {
 
     if (strlen(pin) == 4)
     {
-#if defined SIM7080G_DEBUG || defined SIM7080G_DEBUG_ALL
+#if SIM7080G_DEBUG_LEVEL >= 2
         uartDebugInterface.printf("\tPin format OK!\nDEBUG END: EnterPin(%s)\n", pin);
 #endif
         char tmpBuff[14] = {'A', 'T', '+', 'C', 'P', 'I', 'N', '=', '*', '*', '*', '*', '\r', '\0'};
         memcpy(tmpBuff + 8, pin, 4);
         return SendCommand(tmpBuff);
     }
-#if defined SIM7080G_DEBUG || defined SIM7080G_DEBUG_ALL
+#if SIM7080G_DEBUG_LEVEL >= 2
     uartDebugInterface.printf("\tPin format ERROR!\nDEBUG END: EnterPin(%s)\n", pin);
-#elif defined SIM7080G_VERBOSE
+#elif SIM7080G_DEBUG_LEVEL == 1
     uartDebugInterface.printf("\tSIM7080G - SIM PIN format ERROR!");
 #endif
     return false;
 }
 
-
+//
 bool SIM7080G::GetPINStatus(void) {
     SendCommand("AT+CPIN?\r", rxBuffer);
     return strstr(rxBuffer, "READY");
 }
 
 //
-
 bool SIM7080G::ActivateAppNetwork(void) {
     if (GetAppNetworkStatus()) {
-#if defined SIM7080G_DEBUG || defined SIM7080G_DEBUG_ALL
-    uartDebugInterface.printf("DEBUG START: Deactivatenetwork(void)\n\tSIM7080G - APP Network is already active!\nDEBUG END: Deactivatenetwork(void)\n");
+#if SIM7080G_DEBUG_LEVEL >= 2
+    uartDebugInterface.printf("DEBUG START: ActivateAppNetwork(void)\n\tSIM7080G - APP Network is already active!\nDEBUG END: ActivateAppNetwork(void)\n");
 #endif
         return false;
     }
@@ -357,8 +390,8 @@ bool SIM7080G::ActivateAppNetwork(void) {
 //
 bool SIM7080G::DeactivateAppNetwork(void) {
     if (!GetAppNetworkStatus()) {
-#if defined SIM7080G_DEBUG || defined SIM7080G_DEBUG_ALL
-    uartDebugInterface.printf("DEBUG START: Deactivatenetwork(void)\n\tSIM7080G - APP Network is already inactive!\nDEBUG END: Deactivatenetwork(void)\n");
+#if SIM7080G_DEBUG_LEVEL >= 2
+    uartDebugInterface.printf("DEBUG START: DeactivateAppNetwork(void)\n\tSIM7080G - APP Network is already inactive!\nDEBUG END: DeactivateAppNetwork(void)\n");
 #endif
         return false;
     }
@@ -370,19 +403,31 @@ bool SIM7080G::DeactivateAppNetwork(void) {
 
 //
 uint8_t SIM7080G::GetAppNetworkStatus(void) {
-    size_t bytesRecv = SendCommand("AT+CNACT?\r", rxBuffer);
-    uint8_t status = *(strchr(rxBuffer, ' ') + 3) - '0';  //Convert a number in char to integer
-#if defined SIM7080G_DEBUG || defined SIM7080G_DEBUG_ALL
-    uartDebugInterface.printf("DEBUG START: ActivateNetwork(void)\n");
-    uartDebugInterface.printf("\tAPP Network 0 Status:\n\tStatus offset: %d\n%s\n", status, strchr(rxBuffer, ' ') - rxBuffer + 3, rxBuffer);
-    uartDebugInterface.printf("DEBUG END: ActivateNetwork(void)\n");
-#elif defined SIM7080G_VERBOSE
+    if(!SendCommand("AT+CNACT?\r", rxBuffer, 250)) {
+        #if SIM7080G_DEBUG_LEVEL >= 1
+        uartDebugInterface.printf("\tSIM70800G - GetAppNetworkStatus(void) No response from device!\n");
+        #endif
+        return SIM7080_INVALID_RETURN_VALUE;
+    }
+    char* startPtr = strchr(rxBuffer, ',');
+    
+    //Return if startPtr is null
+    if(!startPtr)
+        return SIM7080_INVALID_RETURN_VALUE;
+    
+    uint8_t status = CharToNmbr((startPtr + 1), 1);
+    #if SIM7080G_DEBUG_LEVEL >= 2
+    uartDebugInterface.printf("DEBUG START: GetAppNetworkStatus(void)\n");
+    uartDebugInterface.printf("\tAPP Network 0 Status:%d\n", status);
+    uartDebugInterface.printf("DEBUG END: GetAppNetworkStatus(void)\n");
+    #elif SIM7080G_DEBUG_LEVEL == 1
     uartDebugInterface.printf("\tSIM7080G - APP Network status: %d\n", status);
 #endif
 
     return status;
 }
 
+//
 void SIM7080G::GetAppNetworkInfo(SIM7080G_APPN* info) {
     if(info == NULL)
         return;
@@ -400,10 +445,94 @@ void SIM7080G::GetAppNetworkInfo(SIM7080G_APPN* info) {
     info->ipv4[charCntr] = '\0';
 }
 
+//
 SIM7080G_APPN SIM7080G::GetAppNetworkInfo(void) {
     SIM7080G_APPN info;
     GetAppNetworkInfo(&info);
     return info;
+}
+
+
+//  #
+//  #   IP applications
+//  #
+
+//
+int SIM7080G::Ping4(const char* address, uint16_t pingCount, uint16_t packetSize, uint32_t timeout) {
+    if (!address || !pingCount || !packetSize || !timeout)
+        return SIM7080_INVALID_PARAMETER;       //Wrong parameters
+
+    if (strlen(address) < 7 || strlen(address) > 15)
+        return SIM7080_INVALID_PARAMETER;       //Bad IP address length
+
+    if (!GetAppNetworkStatus())
+        return SIM7080_INVALID_PARAMETER;       //APP network inactive
+
+    //Check parameter values
+    if(pingCount > 500)
+        pingCount = 500;
+
+    if (packetSize > 1400)
+        packetSize = 1400;
+
+    if (timeout > 60000)
+        timeout = 60000;
+
+    #if SIM7080G_DEBUG_LEVEL >= 1
+    uartDebugInterface.printf("\tSIM7080G - Pinging %s with %u bytes of data...\n", address, packetSize);
+    #endif
+
+    char buffer[32 + strlen(address)] = { '\0' };
+    sprintf(buffer, "AT+SNPING4=\"%s\",%u,%u,%u\r", address, pingCount, packetSize, timeout);
+    SendCommand(buffer);
+
+    uint16_t successful = 0;    //Successful ping count
+    size_t bytesRecv = 0;       //Bytes received from module
+
+    for(uint16_t i = 0; i < pingCount; i++){
+        bytesRecv = Receive((uint8_t*)rxBuffer, 0, timeout + 100);
+        
+        #if SIM7080G_DEBUG_LEVEL >= 1
+        uartDebugInterface.printf("\tSIM7080G -Ping 4: RX buffer: %s\n", rxBuffer);
+        #endif
+
+        //Continue loop if no reply sent
+        if (!bytesRecv) {
+            #if SIM7080G_DEBUG_LEVEL >= 1
+            uartDebugInterface.printf("\tSIM7080G -Ping 4: No reply from module!\n");
+            #endif
+            continue;
+        }
+
+        char* startPtr = strrchr(rxBuffer, ',');
+        
+        //Continue loop if startPtr comes back as nullptr
+        if (!startPtr) {
+            #if SIM7080G_DEBUG_LEVEL >= 1
+            uartDebugInterface.printf("\tSIM7080G -Ping 4: Wrong reply format!\n");
+            #endif
+            continue;
+        }
+
+        uint32_t roundTime = CharToNmbr(startPtr + 1);
+
+        if (roundTime < timeout) {
+            successful++;
+            #if SIM7080G_DEBUG_LEVEL >= 1
+            uartDebugInterface.printf("\tSIM7080G - Got ping reply! RTT: %u\n", roundTime);
+            #endif
+        }
+        #if SIM7080G_DEBUG_LEVEL >= 1
+        else
+            uartDebugInterface.printf("\tSIM7080G - Ping timed out!\n");
+        #endif
+    }
+
+    #if SIM7080G_DEBUG_LEVEL >= 1
+    uartDebugInterface.printf("\tSIM7080G - Ping replies received: %u out of %u\n", successful, pingCount);
+    #endif
+
+    return successful;
 }
 
 
@@ -463,7 +592,7 @@ bool SIM7080G::BuildHTTP(void) {
 uint8_t SIM7080G::GetHTTPStatus(void) {
     SendCommand("AT+SHSTATE?\r", rxBuffer);
     uint8_t httpStatus = *(strchr(rxBuffer, ' ') + 1) - '0';
-#ifdef SIM7080G_VERBOSE
+#if SIM7080G_DEBUG_LEVEL >=1
     uartDebugInterface.printf("\tSIM7080G - Get HTTP status: %u\n", httpStatus);
 #endif
     return httpStatus;
@@ -498,6 +627,320 @@ bool SIM7080G::AddHTTPBodyContent(const SIM7080G_HTTP_BODYCONT bodyContent) {
     return AddHTTPContent(bodyContent.type, bodyContent.value, "AT+SHPARA");
 }
 
+
+//  #
+//  #   File Transfer Protocol (FTP)
+//  #
+
+//
+bool SIM7080G::SetFTPPort(uint16_t port) {
+    char buffer[32] = { '\0' };
+    sprintf(buffer, "AT+FTPPORT=%u\r", port);
+    return SendCommand(buffer);
+}
+
+//
+bool SIM7080G::SetFTPMode(SIM7080G_FTP_MODE mode) {
+    char buffer[16] = { '\0' };
+    sprintf(buffer, "AT+FTPMODE=%u\r", mode);
+    return SendCommand(buffer);
+}
+
+//
+bool SIM7080G::SetFTPDataType(SIM7080G_FTP_DTYPE type) {
+    char buffer[16] = { '\0' };
+    sprintf(buffer, "AT+FTPTYPE=%u\r", type);
+    return SendCommand(buffer);
+}
+
+//
+bool SIM7080G::SetFTPCID(uint8_t pdpidx) {
+    if (pdpidx > 4)
+        return false;
+    
+    char buffer[16] = { '\0' };   //AT+FTPCID=
+    sprintf(buffer, "AT+FTPCID=%u\r", pdpidx);
+    return SendCommand(buffer);
+}
+
+//
+//bool SIM7080G::SetFTPPutType(const char* type) {}
+
+//
+bool SIM7080G::SetFTPServer(const char* ip) {
+    if(ip == NULL || strlen(ip) < 7 || strlen(ip) > 15)
+        return false;
+    char buffer[64] = { '\0' };
+    sprintf(buffer, "AT+FTPSERV=\"%s\"\r", ip);
+    return SendCommand(buffer);
+}
+
+//
+bool SIM7080G::SetFTPUsername(const char* username) {
+    if (username == NULL)
+        return SendCommand("AT+FTPUN=\"\"\r");
+    
+    char buffer [16 + strlen(username)] = { '\0' };
+    sprintf(buffer , "AT+FTPUN=\"%s\"\r", username);
+    return SendCommand(buffer);
+}
+
+//
+bool SIM7080G::SetFTPPassword(const char* password) {
+    if (password == NULL)
+        return SendCommand("AT+FTPPW=\"\"\r");
+    
+    char buffer [16 + strlen(password)] = { '\0' };
+    sprintf(buffer , "AT+FTPPW=\"%s\"\r", password);
+    return SendCommand(buffer);
+}
+
+//
+bool SIM7080G::SetFTPDownFN(const char* filename) {
+    if (filename == NULL)
+        return false;
+    
+    char buffer[32 + strlen(filename)] = { '\0' };
+    sprintf(buffer, "AT+FTPGETNAME=\"%s\"\r", filename);
+    return SendCommand(buffer);
+}
+
+//
+bool SIM7080G::SetFTPDownFP(const char* filePath) {
+    if (filePath == NULL)
+        return false;
+    
+    char buffer[32 + strlen(filePath)] = { '\0' };
+    sprintf(buffer, "AT+FTPGETPATH=\"%s\"\r", filePath);
+    return SendCommand(buffer);
+}
+
+//
+bool SIM7080G::SetFTPUpFN(const char* filename) {
+    if (filename == NULL)
+        return false;
+    
+    char buffer[32 + strlen(filename)] = { '\0' };
+    sprintf(buffer, "AT+FTPPUTNAME=\"%s\"\r", filename);
+    return SendCommand(buffer);
+}
+
+//
+bool SIM7080G::SetFTPUpFP(const char* filePath) {
+    if (filePath == NULL)
+        return false;
+    
+    char buffer[32 + strlen(filePath)] = { '\0' };
+    sprintf(buffer, "AT+FTPPUTPATH=\"%s\"\r", filePath);
+    return SendCommand(buffer);
+}
+
+//
+SIM7080G_FTP_RESULT SIM7080G::FTPUpload(uint8_t* src, size_t length) {
+    //Test given parameters
+    if(!src || !length)
+        return SIM_FTP_PAR_ERR;
+
+    //If in another FTP session close it
+    if(GetFTPState())
+        CloseFTPSession();
+    
+    //Initiate FTP connection
+    char buffer[128] = { '\0' };
+
+    //Initiate the connection
+    SendCommand("AT+FTPPUT=1\r");
+
+    //Check if server responded
+    if(!Receive((uint8_t*)buffer, 0, 78000))
+        return SIM_FTP_TIMEOUT;
+
+    //Process PUT response
+    char* startPtr = strchr(buffer, ',') + 1;                                           //Get result code
+    uint8_t responseCode = CharToNmbr(startPtr, strchr(startPtr, ',') - startPtr);      //...
+
+    #if SIM7080G_DEBUG_LEVEL >= 2
+     uartDebugInterface.printf("\tSIM7080G - FTP Upload: Init put response code %d, RX buffer: %s\n", responseCode, buffer);
+    #endif
+
+    //Return if connection unsuccessful
+    if (responseCode > 1 && responseCode < 100)
+        return (SIM7080G_FTP_RESULT)responseCode;
+
+    //Received max length at once
+    size_t chunkLength = CharToNmbr(strchr(startPtr, ',') + 1);
+    size_t dataLength = length;
+    size_t dataSent = 0;
+
+    #if SIM7080G_DEBUG_LEVEL == 1
+    uartDebugInterface.printf("\tSIM7080G - FTP Upload: Uploading %u bytes of data...\n", length);
+    #elif SIM7080G_DEBUG_LEVEL >= 2
+    uartDebugInterface.printf("\tSIM7080G - FTP Upload: ChunkLen: %u, Data len: %u\n", chunkLength, dataLength);
+    #endif
+
+    //Send data in segments if larger than maximum chunk size
+    while(dataLength > chunkLength) {
+        #if SIM7080G_DEBUG_LEVEL >= 2
+        uartDebugInterface.printf("\tSIM7080G - FTP Upload: Uploading chunk!\n");
+        #endif
+
+        //Initiate data transaction
+        sprintf(buffer, "AT+FTPPUT=2,%u\r", chunkLength);
+        if (!SendCommand(buffer, rxBuffer, 75000)) {
+            CloseFTPSession();
+            return SIM_FTP_TIMEOUT; //Connection timed out
+        }
+
+        //Check 
+        if(CharToNmbr(strchr(rxBuffer, ',') + 1) != (length > chunkLength ? chunkLength : length))  {
+            #if SIM7080G_DEBUG_LEVEL >= 2
+            uartDebugInterface.printf("\tSIM7080G - FTP Upload: Requested and provided byte size mismatched! Provided: %u, requested: %u\n", chunkLength, CharToNmbr(strchr(rxBuffer, ',') + 1));
+            #endif
+            CloseFTPSession();
+            return SIM_FTP_OTH_ERR;
+        }
+
+        //Send data to the server and update trackers
+        Send(src + dataSent, chunkLength);
+        dataSent += chunkLength;
+        dataLength -= chunkLength;
+        
+        //Wait for confirmation
+        if(!Receive((uint8_t*)rxBuffer, 0, 75000)) {
+            CloseFTPSession();
+            return SIM_FTP_TIMEOUT;
+        }
+        
+        startPtr = strchr(rxBuffer, ',') + 1;
+        responseCode = CharToNmbr(startPtr);
+
+        #if SIM7080G_DEBUG_LEVEL >= 2
+        uartDebugInterface.printf("\tSIM7080G - FTP Upload: Status code: %u\n", rxBuffer[0] - '0');
+        uartDebugInterface.printf("\tSIM7080G - FTP Upload: Put response code %d, bytes sent: %u\n", responseCode, dataSent);
+        #endif
+        #if SIM7080G_DEBUG_LEVEL >= 2
+        uartDebugInterface.printf("\tSIM7080G - FTP Upload: RX buffer: \n%s\n", rxBuffer);
+        #endif
+
+        //Return if connection unsuccessful
+        if (responseCode > 1 && responseCode < 100)
+            return (SIM7080G_FTP_RESULT)responseCode;
+
+        if(chunkLength != CharToNmbr(strchr(startPtr, ',') + 1)) {
+            chunkLength = CharToNmbr(strchr(startPtr, ',') + 1);
+            #if SIM7080G_DEBUG_LEVEL >= 2
+            uartDebugInterface.printf("\tSIM7080G - FTP Upload: Data chunk length changed: %u\n", chunkLength);
+            #endif
+        }
+    } // while(dataLength > chunkLength)
+
+    #if SIM7080G_DEBUG_LEVEL >= 2
+    uartDebugInterface.printf("\tSIM7080G - FTP Upload: Uploading last chunk!\n");
+    #endif
+
+    sprintf(buffer, "AT+FTPPUT=2,%u\r", dataLength);
+    SendCommand(buffer, rxBuffer, 75000);
+
+    if(CharToNmbr(strchr(rxBuffer, ',') + 1) != dataLength)  {
+        #if SIM7080G_DEBUG_LEVEL >= 2
+        uartDebugInterface.printf("\tSIM7080G - FTP Upload: Requested and provided byte size not matched! Req: %u, prov: %u\n", CharToNmbr(strchr(rxBuffer, ',') + 1), dataLength);
+        #endif
+    }
+
+    #if SIM7080G_DEBUG_LEVEL >= 3
+    uartDebugInterface.printf("\tSIM7080G - FTP Upload: RX buffer: \n%s\n", rxBuffer);
+    #endif
+
+    //Send data to the server and update trackers
+    Send(src + dataSent, dataLength);
+
+    //Wait for confirmation
+    if(!Receive((uint8_t*)rxBuffer, 0, 75000)) {
+        CloseFTPSession();
+        return SIM_FTP_TIMEOUT;
+    }
+
+    startPtr = strchr(rxBuffer, ',') + 1;
+    responseCode = CharToNmbr(startPtr);
+
+    #if SIM7080G_DEBUG_LEVEL >= 2
+    uartDebugInterface.printf("\tSIM7080G - FTP Upload: Status code: %u\n", rxBuffer[0]);
+    uartDebugInterface.printf("\tSIM7080G - FTP Upload: Put response code %d, bytes sent: %u\n", responseCode, dataSent);
+    #endif
+    #if SIM7080G_DEBUG_LEVEL >= 2
+    uartDebugInterface.printf("\tSIM7080G - FTP Upload: RX buffer: \n%s\n", rxBuffer);
+    #endif
+
+    //Return if connection unsuccessful
+        if (responseCode > 1 && responseCode < 100)
+            return (SIM7080G_FTP_RESULT)responseCode;
+    
+    //End FTP transaction
+    SendCommand("AT+FTPPUT=2,0\r");
+
+    //Wait for confirmation
+    if(!Receive((uint8_t*)rxBuffer, 0, 75000)) {
+        CloseFTPSession();
+        return SIM_FTP_TIMEOUT;
+    }
+
+    //Get response code from received data
+    responseCode = CharToNmbr(startPtr);
+
+    #if SIM7080G_DEBUG_LEVEL >= 2
+    uartDebugInterface.printf("\tSIM7080G - FTP Upload: Put response code: %u\n", responseCode);
+    #endif
+    #if SIM7080G_DEBUG_LEVEL >= 3
+    uartDebugInterface.printf("\tSIM7080G - FTP Upload: RX buffer: \n%s\n", rxBuffer);
+    #endif
+
+    //Return if connection unsuccessful
+        if (responseCode > 0)
+            return (SIM7080G_FTP_RESULT)responseCode;
+
+    startPtr = strchr(rxBuffer, ' ') + 1;
+    if (*startPtr == '1' &&  CharToNmbr(strchr(startPtr, ',') + 1) == 0) {
+        #if SIM7080G_DEBUG_LEVEL == 1
+        uartDebugInterface.printf("\tSIM7080G - FTP Upload: Successful!\n", length);
+        #elif SIM7080G_DEBUG_LEVEL >= 2
+        uartDebugInterface.printf("\tSIM7080G - FTP Upload: Session successful!\n");
+        #endif
+        return SIM_FTP_SUCCESS;
+    }
+
+    //Upload was not confirmed to be successful
+    return SIM_FTP_UPL_ERR;
+}
+
+//Will be implemented later
+//SIM7080G_FTP_RESULT SIM7080G::FTPDownload(uint8_t* dst, size_t* bytesReceived) {}
+
+//Will be implemented later
+//SIM7080G_FTP_RESULT SIM7080G::DeleteFTPFile(void) {}//
+
+//Will be implemented later
+//size_t SIM7080G::GetFTPFileSize(void) {}
+
+//
+uint8_t SIM7080G::GetFTPState(void) {
+    SendCommand("AT+FTPSTATE\r", rxBuffer);
+    char* startPtr = strchr(rxBuffer, ' ');
+    if(!strchr(rxBuffer, ' '))
+        return 0;
+    return *(startPtr + 1) - '0';
+}
+
+//
+//bool SIM7080G::MkFTPDir(void) {}
+
+//
+//bool SIM7080G::RmFTPDir(void) {}
+
+//
+void SIM7080G::CloseFTPSession() {
+    SendCommand("AT+FTPQUIT\r");
+}
+
 //  #
 //  #   GNSS Application
 //  #
@@ -512,7 +955,7 @@ bool SIM7080G::PowerDownGNSS() { return GetGNSSPower() ? SendCommand("AT+CGNSPWR
 uint8_t SIM7080G::GetGNSSPower() {
     size_t bytesRecv = SendCommand("AT+CGNSPWR?\r", rxBuffer);
     uint8_t status = rxBuffer[bytesRecv - 5] - '0';
-#if defined SIM7080G_VERBOSE
+#if SIM7080G_DEBUG_LEVEL >= 1
     uartDebugInterface.printf("\tSIM7080G - GNSS Power status: %d\n", status);
 #endif
     return status;
@@ -533,7 +976,7 @@ void SIM7080G::GetGNSS(SIM7080G_GNSS* dst) {
     //Get GNSS info from device
     size_t bytesrecv = SendCommand("AT+CGNSINF\r", rxBuffer);
 
-#if defined SIM7080G_VERBOSE
+#if SIM7080G_DEBUG_LEVEL >= 1
     uartDebugInterface.printf("\tSIM7080G - GNSS update requested: %s\n", rxBuffer);
 #endif
     
@@ -592,6 +1035,13 @@ SIM7080G_GNSS SIM7080G::GetGNSS(void) {
     return gnssInfo;
 }
 
+//
+bool SIM7080G::GetGNSSLock(void) {
+    SIM7080G_GNSS gnssInfo;
+    GetGNSS(&gnssInfo);
+    return gnssInfo.datetime[0] != 0 && (gnssInfo.latitude[0] == '\0' || strcmp(gnssInfo.latitude, "0.000000"));
+}
+
 
 //  #
 //  #   Power
@@ -600,7 +1050,7 @@ SIM7080G_GNSS SIM7080G::GetGNSS(void) {
 uint16_t SIM7080G::GetVBat(void) {
     SendCommand("AT+CBC\r", rxBuffer);
     uint16_t vBat = CharToNmbr(strchr(strchr(rxBuffer, ',') + 1, ',') + 1);
-#ifdef SIM7080G_VERBOSE
+#if SIM7080G_DEBUG_LEVEL >= 1
     uartDebugInterface.printf("\tSIM7080G - Battery voltage: %u\n", vBat);
 #endif
     return vBat;
@@ -638,3 +1088,7 @@ bool SIM7080G::AddHTTPContent(const char* type, const char* value, const char* c
     
     return SendCommand(buffer);
 }
+
+
+
+
