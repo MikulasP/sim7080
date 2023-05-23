@@ -1,5 +1,5 @@
 # SIM7080
-A work in progress, Arduino compatible library for SIMCOM SIM7080G.
+A work in progress, Arduino compatible library for the SIMCOM SIM7080G.
 
 ##Documents for the SIM7080G module
 
@@ -12,7 +12,7 @@ As of now (May 2023) the time schedule is tight and because of that functionalit
 
 Updates with new functions and optimizations are to be expected soon.
 
-##Some notes
+## Some notes
 
 During the development I ran into a few problems that are worth mentioning:
 
