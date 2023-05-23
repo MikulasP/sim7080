@@ -1,8 +1,6 @@
 # SIM7080
 A work in progress, Arduino compatible library for the SIMCOM SIM7080G.
 
-##Documents for the SIM7080G module
-
 The official documentations are available on the simcom website: https://www.simcom.com/product/SIM7080G.html
 
 ## About this library
